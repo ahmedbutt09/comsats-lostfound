@@ -178,11 +178,12 @@ const initializeServiceWorkers = async () => {
 };
 
 // Initialize service workers on page load
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initializeServiceWorkers);
-} else {
-  initializeServiceWorkers();
-}
+// Comment these out!
+// if (document.readyState === 'loading') {
+//   document.addEventListener('DOMContentLoaded', initializeServiceWorkers);
+// } else {
+//   initializeServiceWorkers();
+// }
 
 // Optional: Add offline detection
 const setupOfflineDetection = () => {
