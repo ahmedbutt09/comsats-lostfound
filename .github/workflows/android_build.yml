@@ -21,7 +21,9 @@ jobs:
       - name: Build Web Project
         run: npm run build
         env:
-          CI: false 
+          CI: false
+          REACT_APP_SUPABASE_URL: ${{ secrets.REACT_APP_SUPABASE_URL }}
+          REACT_APP_SUPABASE_ANON_KEY: ${{ secrets.REACT_APP_SUPABASE_ANON_KEY }}
 
       - name: Setup Java 21 # Updated to match Capacitor 8 requirements
         uses: actions/setup-java@v4
@@ -43,4 +45,3 @@ jobs:
         with:
           name: COMSATS-App
           path: android/app/build/outputs/apk/debug/app-debug.apk
-          
