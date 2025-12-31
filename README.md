@@ -1,37 +1,67 @@
-# COMSATS Lost & Found System
+#COMSATS Lost & Found System
+A comprehensive platform for reporting and finding lost items within COMSATS University, now featuring a fully native Android experience.
 
-A comprehensive platform for reporting and finding lost items within COMSATS University.
+##Features
+###🔐 University Authentication: Secure login via university email-based authentication.
 
-## Features
+###📱 Native Android Support: Optimized for Android 15 (API 35) with custom adaptive icons and splash screens.
 
-- 🔐 University email-based authentication
-- 📱 Mobile-responsive design
-- 📸 Image upload for lost/found items
-- 🔍 Advanced search and matching algorithm
-- 💬 In-app messaging system
-- 📱 PWA support for mobile devices
-- 👮 Admin dashboard for moderation
+###📸 Image Upload: Seamless image capture and upload for lost/found items using Supabase Storage.
 
-## Tech Stack
+###🔍 Advanced Search: Smart matching algorithm to filter items by category, location, and date.
 
-- **Frontend**: React 18 with TypeScript
-- **UI Library**: Material-UI
-- **Backend**: Supabase (Auth, Firestore, Storage, Functions)
-- **Routing**: React Router v6
-- **Forms**: React Hook Form with Zod validation
-- **Notifications**: React Hot Toast
+###💬 Messaging: In-app communication system for coordinate item returns.
 
-## Getting Started
+###📱 PWA & Hybrid: Support for both Progressive Web App and Native Android installation via Capacitor.
 
-### Prerequisites
+###👮 Admin Dashboard: Specialized moderation tools for campus security/admins.
 
-- Node.js (v16 or higher)
-- npm or yarn
-- Firebase account
+##Tech Stack
+###Frontend: React 18 with TypeScript
 
-### Installation
+###Mobile Bridge: Capacitor 7 (Targeting Android 15)
 
-1. Clone the repository
-2. Install dependencies:
-   ```bash
-   npm install
+###UI Library: Material-UI
+
+###Backend: Supabase (Auth, PostgreSQL, Storage, Edge Functions)
+
+###Java Runtime: Java 21 (LTS)
+
+###Build System: Gradle 8.9 with AGP 8.6.1
+
+###Forms: React Hook Form with Zod validation
+
+###Notifications: React Hot Toast
+
+##Getting Started
+Prerequisites
+Node.js: v18 or higher
+
+JDK: Java 21 (Required for the Android build toolchain)
+
+Android Studio: Ladybug or newer
+
+Capacitor CLI: npm install -g @capacitor/cli
+
+##Installation
+Clone the repository:
+
+git clone https://github.com/your-username/comsats-lostfound.git
+cd comsats-lostfound
+Install Web Dependencies:
+
+npm install
+
+##Initialize Android Project:
+
+npx cap sync android
+Building the App
+To generate the latest Android APK with your custom branding:
+
+Navigate to the android folder:
+
+
+cd android
+Run the clean build:
+
+./gradlew clean assembleDebug
