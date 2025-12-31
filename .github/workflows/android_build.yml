@@ -13,7 +13,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22 # Updated to match Capacitor 8 requirements
+          node-version: 22
 
       - name: Install Dependencies
         run: npm install
@@ -23,11 +23,11 @@ jobs:
         env:
           CI: false 
 
-      - name: Setup Java 17
+      - name: Setup Java 21 # Updated to match Capacitor 8 requirements
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
-          java-version: '17'
+          java-version: '21'
 
       - name: Capacitor Sync
         run: npx cap sync android
