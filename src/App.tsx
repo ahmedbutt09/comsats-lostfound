@@ -6,6 +6,8 @@ import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
+// Import supabase client
+import { supabase } from './lib/supabaseClient';
 
 // Auth Components
 import AdminLogin from './components/auth/AdminLogin';
@@ -31,12 +33,12 @@ import CaseDetails from './pages/CaseDetails';
 import AdminDashboard from './pages/AdminDashboard';
 import TermsOfUse from './pages/TermsOfUse';
 import PrivacyPolicy from './pages/PrivacyPolicy';
-// Chat Pages (create these or comment out if not ready)
+// Chat Pages
 import Chat from './pages/Chat';
 import Messages from './pages/Messages';
 import ChatWindowWrapper from './components/chat/ChatWindowWrapper';
 
-// Additional Pages (create these or comment out if not ready)
+// Additional Pages
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import EditCase from './pages/EditCase';
@@ -146,10 +148,8 @@ const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => 
   
   if (loading) return <LoadingSpinner message="Checking authentication..." />;
   
-  // 1. If no user at all, go to login
   if (!currentUser) return <Navigate to="/login" />;
 
-  // 2. Allow if email is confirmed OR if provider is Google
   const isGoogleUser = currentUser.app_metadata?.provider === 'google';
   const isConfirmed = currentUser.email_confirmed_at || isGoogleUser;
 
@@ -160,7 +160,7 @@ const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => 
   return <>{children}</>;
 };
 
-// Public Route Wrapper (redirects if already logged in)
+// Public Route Wrapper
 const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { currentUser, loading } = useAuth();
   
@@ -178,7 +178,7 @@ const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 5 * 60 * 1000, // 5 minutes
+      staleTime: 5 * 60 * 1000,
       retry: 1,
       refetchOnWindowFocus: false,
       refetchOnMount: true,
@@ -191,6 +191,17 @@ const queryClient = new QueryClient({
 });
 
 function App() {
+  // Fix for APK: Capture Google Auth session changes immediately
+  React.useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' && session) {
+        console.log("Auth state changed: Signed In");
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider theme={theme}>
@@ -226,16 +237,12 @@ function App() {
         />
         <AuthProvider>
           <Router>
-            {/* 1. ADD IT HERE - Inside the Router, before the UI starts */}
-    <ScrollToTop /> 
-
-<div className="App" style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-  <COMSATSHeader />
-  <main style={{ flex: 1, padding: '0' }}>
+            <ScrollToTop /> 
+            <div className="App" style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+              <COMSATSHeader />
+              <main style={{ flex: 1, padding: '0' }}>
                 <Routes>
-                  {/* Public Routes */}
                   <Route path="/" element={<Home />} />
-                  
                   <Route 
                     path="/login" 
                     element={
@@ -244,7 +251,6 @@ function App() {
                       </PublicRoute>
                     } 
                   />
-                  
                   <Route 
                     path="/register" 
                     element={
@@ -261,11 +267,9 @@ function App() {
                   <Route path="/found" element={<FoundItems />} />
                   <Route path="/case/:id" element={<CaseDetails />} />
                   <Route path="/verify-email" element={<VerifyEmail />} />
-                  {/* Password Reset Routes */}
                   <Route path="/forgot-password" element={<ForgotPassword />} />
                   <Route path="/reset-password" element={<ResetPassword />} />
                   
-                  {/* Private Routes - Require Authentication */}
                   <Route 
                     path="/dashboard" 
                     element={
@@ -274,7 +278,6 @@ function App() {
                       </PrivateRoute>
                     } 
                   />
-                  
                   <Route 
                     path="/report" 
                     element={
@@ -283,7 +286,6 @@ function App() {
                       </PrivateRoute>
                     } 
                   />
-                  
                   <Route 
                     path="/profile" 
                     element={
@@ -292,7 +294,6 @@ function App() {
                       </PrivateRoute>
                     } 
                   />
-                  
                   <Route 
                     path="/my-cases" 
                     element={
@@ -301,7 +302,6 @@ function App() {
                       </PrivateRoute>
                     } 
                   />
-                  
                   <Route 
                     path="/edit-case/:id" 
                     element={
@@ -310,8 +310,6 @@ function App() {
                       </PrivateRoute>
                     } 
                   />
-                  
-                  {/* Chat Routes */}
                   <Route 
                     path="/chat" 
                     element={
@@ -320,7 +318,6 @@ function App() {
                       </PrivateRoute>
                     } 
                   />
-                  
                   <Route 
                     path="/messages" 
                     element={
@@ -329,7 +326,6 @@ function App() {
                       </PrivateRoute>
                     } 
                   />
-                  
                   <Route 
                     path="/chat/:caseId" 
                     element={
@@ -338,8 +334,6 @@ function App() {
                       </PrivateRoute>
                     } 
                   />
-                  
-                  {/* Admin Routes - Require Admin Role */}
                   <Route 
                     path="/admin" 
                     element={
@@ -348,7 +342,6 @@ function App() {
                       </AdminRoute>
                     } 
                   />
-                  
                   <Route 
                     path="/admin/cases" 
                     element={
@@ -357,7 +350,6 @@ function App() {
                       </AdminRoute>
                     } 
                   />
-                  
                   <Route 
                     path="/admin/users" 
                     element={
@@ -366,17 +358,12 @@ function App() {
                       </AdminRoute>
                     } 
                   />
-                  
-                  {/* 404 Route */}
                   <Route path="*" element={<NotFound />} />
                 </Routes>
               </main>
               <COMSATSFooter />
             </div>
           </Router>
-          
-          
-          {/* React Query DevTools - Only in development */}
           {process.env.NODE_ENV === 'development' && (
             <ReactQueryDevtools initialIsOpen={false} />
           )}
@@ -385,6 +372,5 @@ function App() {
     </QueryClientProvider>
   );
 }
-
 
 export default App;
