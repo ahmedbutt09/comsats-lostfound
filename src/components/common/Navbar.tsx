@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link as RouterLink, useNavigate } from 'react-router-dom';
+import { Link as RouterLink, useNavigate, useLocation } from 'react-router-dom'; // Added useLocation
 import {
   AppBar,
   Box,
@@ -32,7 +32,7 @@ import {
   Logout,
   AppRegistration,
   FindInPage,
-  GpsFixed,
+  ArrowBack, // Added ArrowBack icon
 } from '@mui/icons-material';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -40,9 +40,14 @@ const Navbar: React.FC = () => {
   const [anchorElUser, setAnchorElUser] = useState<null | HTMLElement>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
   const { currentUser, userData, logout } = useAuth();
+  
   const navigate = useNavigate();
+  const location = useLocation(); // Used to check current path
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+
+  // Logic: Only show back button if NOT on the home/landing page
+  const canGoBack = location.pathname !== '/';
 
   const handleOpenUserMenu = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorElUser(event.currentTarget);
@@ -88,6 +93,7 @@ const Navbar: React.FC = () => {
         </Typography>
       </Box>
       <Divider />
+      {/* ... drawer content remains the same ... */}
       <List>
         {navItems.map((item) => (
           <ListItem
@@ -159,36 +165,67 @@ const Navbar: React.FC = () => {
     <>
       <AppBar position="static">
         <Container maxWidth="xl">
-          <Toolbar disableGutters>
-            {/* Mobile Menu Button */}
-            <IconButton
-              color="inherit"
-              aria-label="open drawer"
-              edge="start"
-              onClick={handleDrawerToggle}
-              sx={{ mr: 2, display: { md: 'none' } }}
-            >
-              <MenuIcon />
-            </IconButton>
+        <Toolbar disableGutters>
+  {/* BACK BUTTON - Placed at the very start */}
+  {canGoBack && (
+    <IconButton
+      color="inherit"
+      onClick={() => navigate(-1)}
+      sx={{ mr: 1 }}
+    >
+      <ArrowBack />
+    </IconButton>
+  )}
 
-            {/* Logo */}
-            <FindInPage sx={{ display: { xs: 'none', md: 'flex' }, mr: 1 }} />
+  {/* MOBILE MENU BUTTON (Hamburger) */}
+  <IconButton
+    color="inherit"
+    aria-label="open drawer"
+    edge="start"
+    onClick={handleDrawerToggle}
+    sx={{ 
+      mr: 2, 
+      display: { md: 'none' } 
+    }}
+  >
+    <MenuIcon />
+  </IconButton>
+
+  {/* LOGO SECTION */}
+  <FindInPage sx={{ display: { xs: 'none', md: 'flex' }, mr: 1 }} />
+  <Typography
+    variant="h6"
+    noWrap
+    component={RouterLink}
+    to="/"
+    sx={{
+      flexGrow: { xs: 1, md: 0 }, // This allows it to center/fill space on mobile
+      fontFamily: 'monospace',
+      fontWeight: 700,
+      color: 'inherit',
+      textDecoration: 'none',
+      display: 'flex'
+    }}
+  >
+    COMSATS L&F
+  </Typography>
+
+            {/* Mobile Logo version (visible on small screens) */}
             <Typography
               variant="h6"
               noWrap
               component={RouterLink}
               to="/"
               sx={{
-                mr: 2,
-                display: { xs: 'none', md: 'flex' },
+                display: { xs: 'flex', md: 'none' },
+                flexGrow: 1,
                 fontFamily: 'monospace',
                 fontWeight: 700,
-                letterSpacing: '.1rem',
                 color: 'inherit',
                 textDecoration: 'none',
               }}
             >
-              COMSATS Lost & Found
+              COMSATS L&F
             </Typography>
 
             {/* Desktop Navigation */}
@@ -206,7 +243,7 @@ const Navbar: React.FC = () => {
               ))}
             </Box>
 
-            {/* User Menu */}
+            {/* User Menu logic... */}
             <Box sx={{ flexGrow: 0 }}>
               {currentUser ? (
                 <>
@@ -214,7 +251,7 @@ const Navbar: React.FC = () => {
                     <IconButton onClick={handleOpenUserMenu} sx={{ p: 0 }}>
                       <Avatar
                         alt={userData?.name || 'User'}
-                        src={userData?.avatar_url} // Changed from photoURL to avatar_url
+                        src={userData?.avatar_url}
                         sx={{ bgcolor: 'secondary.main' }}
                       >
                         {userData?.name?.charAt(0) || currentUser?.email?.charAt(0).toUpperCase() || 'U'}
@@ -225,15 +262,9 @@ const Navbar: React.FC = () => {
                     sx={{ mt: '45px' }}
                     id="menu-appbar"
                     anchorEl={anchorElUser}
-                    anchorOrigin={{
-                      vertical: 'top',
-                      horizontal: 'right',
-                    }}
+                    anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
                     keepMounted
-                    transformOrigin={{
-                      vertical: 'top',
-                      horizontal: 'right',
-                    }}
+                    transformOrigin={{ vertical: 'top', horizontal: 'right' }}
                     open={Boolean(anchorElUser)}
                     onClose={handleCloseUserMenu}
                   >
@@ -265,21 +296,10 @@ const Navbar: React.FC = () => {
                 </>
               ) : (
                 <Box sx={{ display: { xs: 'none', md: 'flex' }, gap: 1 }}>
-                  <Button
-                    component={RouterLink}
-                    to="/login"
-                    color="inherit"
-                    startIcon={<Login />}
-                  >
+                  <Button component={RouterLink} to="/login" color="inherit" startIcon={<Login />}>
                     Login
                   </Button>
-                  <Button
-                    component={RouterLink}
-                    to="/register"
-                    variant="contained"
-                    color="secondary"
-                    startIcon={<AppRegistration />}
-                  >
+                  <Button component={RouterLink} to="/register" variant="contained" color="secondary" startIcon={<AppRegistration />}>
                     Register
                   </Button>
                 </Box>
@@ -289,15 +309,12 @@ const Navbar: React.FC = () => {
         </Container>
       </AppBar>
 
-      {/* Mobile Drawer */}
       <Drawer
         variant="temporary"
         anchor="left"
         open={mobileOpen}
         onClose={handleDrawerToggle}
-        ModalProps={{
-          keepMounted: true,
-        }}
+        ModalProps={{ keepMounted: true }}
         sx={{
           display: { xs: 'block', md: 'none' },
           '& .MuiDrawer-paper': { boxSizing: 'border-box', width: 250 },

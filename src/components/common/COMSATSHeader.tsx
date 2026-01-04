@@ -14,6 +14,7 @@ import {
   useMediaQuery,
   Badge,
   Collapse,
+  
   Tooltip,
   Fade,
   Chip
@@ -31,7 +32,8 @@ import {
   AddCircle,
   Search,
   AdminPanelSettings,
-  History
+  History,
+  ArrowBack
 } from '@mui/icons-material';
 import { Link as RouterLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
@@ -82,7 +84,21 @@ const COMSATSHeader: React.FC = () => {
     >
       <Container maxWidth="xl">
         <Toolbar disableGutters sx={{ minHeight: { xs: 70, md: 80 } }}>
-          
+          {/* BACK BUTTON - Visible on both Mobile and Desktop if not at home */}
+{location.pathname !== '/' && (
+  <IconButton
+    onClick={() => navigate(-1)}
+    sx={{ 
+      color: 'white', 
+      mr: 1,
+      // Optional: Add a slight background to make it pop against the blue
+      bgcolor: 'rgba(255,255,255,0.08)',
+      '&:hover': { bgcolor: 'rgba(255,255,255,0.2)' }
+    }}
+  >
+    <ArrowBack /> {/* Make sure to import ArrowBack from @mui/icons-material */}
+  </IconButton>
+)}
           {/* LOGO AREA */}
           <Box sx={{ display: 'flex', alignItems: 'center', flexGrow: { xs: 1, md: 0 }, mr: 4 }}>
              <RouterLink to="/" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none' }}>

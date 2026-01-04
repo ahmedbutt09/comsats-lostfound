@@ -23,21 +23,14 @@ import { Message } from '../../types';
 
 interface ChatWindowProps {
   caseId: string;
-  caseTitle?: string; // Added this to pass case title
+  caseTitle?: string;
   receiverId: string;
   receiverName: string;
   open: boolean;
   onClose: () => void;
 }
 
-const ChatWindow: React.FC<ChatWindowProps> = ({
-  caseId,
-  caseTitle = 'Case Chat', // Default value
-  receiverId,
-  receiverName,
-  open,
-  onClose,
-}) => {
+const ChatWindow: React.FC<ChatWindowProps> = ({ caseId, caseTitle = 'Case Chat', receiverId, receiverName, open, onClose }) => {
   const { currentUser, userData } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
@@ -48,33 +41,61 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null); // NEW: For attachments
 
-  // Scroll to bottom of chat
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  // Get or create chat room
+  // --- NEW: REAL ATTACHMENT FUNCTION ---
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !chatId || !currentUser) return;
+
+    setIsSending(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Math.random()}.${fileExt}`;
+      const filePath = `chat_attachments/${chatId}/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+      .from('chat-attachments') 
+      .upload(filePath, file);
+    
+    if (uploadError) throw uploadError;
+    
+    const { data: { publicUrl } } = supabase.storage
+      .from('chat-attachments') // Matches the upload bucket
+      .getPublicUrl(filePath);
+
+      await supabase.from('messages').insert({
+        chat_id: chatId,
+        sender_id: currentUser.id,
+        receiver_id: receiverId,
+        content: publicUrl, // Sends the image URL
+        is_read: false,
+        // message_type: 'image' // Uncomment if your DB has this column
+      });
+    } catch (err: any) {
+      setError('Upload failed: ' + err.message);
+    } finally {
+      setIsSending(false);
+    }
+  };
+
   const getOrCreateChat = async () => {
     if (!currentUser?.id) return null;
-  
     try {
-      // 1. Check for existing chat using BOTH participants in the exact array
-      // We sort the array to ensure [A, B] and [B, A] match the same record
-      const participantIds = [currentUser.id, receiverId].sort();
-  
-      const { data: existingChat, error: findError } = await supabase
+      const { data: existingChat } = await supabase
         .from('chats')
         .select('id')
         .eq('case_id', caseId)
         .contains('participants', [currentUser.id])
         .contains('participants', [receiverId])
         .maybeSingle();
-  
+
       if (existingChat) return existingChat.id;
-  
-      // 2. Insert with an "upsert" style logic
-      // 'onConflict' tells Supabase: "If you see a 409, just give me the existing row instead"
+
       const { data: newChat, error: createError } = await supabase
         .from('chats')
         .upsert({
@@ -86,171 +107,125 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
             [receiverId]: receiverName,
           },
           unread_count: { [receiverId]: 0, [currentUser.id]: 0 },
-        }, {
-          onConflict: 'case_id, participants', 
-          ignoreDuplicates: false
-        })
-        .select()
-        .single();
-  
+        }, { onConflict: 'case_id, participants' })
+        .select().single();
+
       if (createError) throw createError;
       return newChat?.id;
-  
-    } catch (error) {
-      console.error('Chat Initialization Error:', error);
-      setError('Could not connect to chat.');
+    } catch (err) {
+      console.error('Chat Init Error:', err);
       return null;
     }
   };
-  // Fetch messages
-  const fetchMessages = async (chatId: string) => {
+
+  const fetchMessages = async (id: string) => {
     try {
       const { data, error } = await supabase
         .from('messages')
         .select('*')
-        .eq('chat_id', chatId)
+        .eq('chat_id', id)
         .order('created_at', { ascending: true });
-
       if (error) throw error;
-
-      if (data) {
-        setMessages(data as Message[]);
-      }
-      setLoading(false);
-    } catch (error) {
-      console.error('Error fetching messages:', error);
-      setError('Failed to load messages');
+      setMessages(data as Message[]);
+    } finally {
       setLoading(false);
     }
   };
 
-  // Subscribe to new messages
-  const subscribeToMessages = (chatId: string) => {
-    const subscription = supabase
-      .channel(`messages:chat_id=eq.${chatId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-          filter: `chat_id=eq.${chatId}`,
-        },
-        (payload) => {
-          setMessages((prev) => [...prev, payload.new as Message]);
-          setTimeout(scrollToBottom, 100);
-        }
-      )
-      .subscribe();
-
-    return subscription;
-  };
-
+  // --- FIXED: REALTIME SUBSCRIPTION ---
   useEffect(() => {
     if (!open || !currentUser?.id) return;
 
-    setLoading(true);
-    setError('');
+    let channel: any;
 
-    const initializeChat = async () => {
+    const initialize = async () => {
+      setLoading(true);
       try {
-        const chatId = await getOrCreateChat();
-        if (!chatId) {
-          setError('Failed to initialize chat');
-          setLoading(false);
+        const id = await getOrCreateChat();
+        if (!id) {
+          setError('Could not start chat');
           return;
         }
 
-        setChatId(chatId);
-        await fetchMessages(chatId);
-        
-        // Set up real-time subscription
-        const subscription = subscribeToMessages(chatId);
-        
-        // Mark messages as read
-        await markMessagesAsRead(chatId);
-        
-        return () => {
-          subscription.unsubscribe();
-        };
-      } catch (error) {
-        console.error('Error initializing chat:', error);
-        setError('Failed to initialize chat');
+        setChatId(id);
+        await fetchMessages(id);
+        await markMessagesAsRead(id);
+
+        // Unique channel name prevents "Channel already exists" errors
+        channel = supabase
+          .channel(`room_${id}_${Date.now()}`)
+          .on('postgres_changes', 
+            { 
+              event: 'INSERT', 
+              schema: 'public', 
+              table: 'messages', 
+              filter: `chat_id=eq.${id}` 
+            }, 
+            (payload) => {
+              const msg = payload.new as Message;
+              setMessages((prev) => {
+                if (prev.find(m => m.id === msg.id)) return prev;
+                return [...prev, msg];
+              });
+              setTimeout(scrollToBottom, 100);
+            }
+          )
+          .subscribe((status) => {
+            console.log("Subscription status:", status);
+          });
+      } catch (err) {
+        console.error("Chat Error:", err);
+        setError("Failed to connect to chat.");
+      } finally {
         setLoading(false);
       }
     };
 
-    const cleanup = initializeChat();
+    initialize();
 
     return () => {
-      if (cleanup) {
-        cleanup.then(fn => fn && fn());
-      }
+      if (channel) supabase.removeChannel(channel);
     };
-  }, [open, currentUser, receiverId, caseId]);
+  }, [open, caseId, receiverId, currentUser?.id]);
 
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
-  // Mark messages as read
-  const markMessagesAsRead = async (chatId: string) => {
+  const markMessagesAsRead = async (id: string) => {
     if (!currentUser?.id) return;
-
-    try {
-      await supabase
-        .from('messages')
-        .update({ is_read: true })
-        .eq('chat_id', chatId)
-        .eq('receiver_id', currentUser.id)
-        .eq('is_read', false);
-    } catch (error) {
-      console.error('Error marking messages as read:', error);
-    }
+    await supabase.from('messages')
+      .update({ is_read: true })
+      .eq('chat_id', id)
+      .eq('receiver_id', currentUser.id)
+      .eq('is_read', false);
   };
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     if (!newMessage.trim() || !currentUser?.id || isSending || !chatId) return;
-  
     setIsSending(true);
-    setError('');
-  
     try {
-      // We strictly send ONLY what is needed. 
-      // If the 409 persists, remove 'case_id' from this insert entirely.
-      const { error: sendError } = await supabase
-        .from('messages')
-        .insert({
-          chat_id: chatId,
-          sender_id: currentUser.id,
-          receiver_id: receiverId,
-          content: newMessage.trim(),
-          is_read: false,
-          // case_id: caseId // TRY REMOVING THIS LINE if it still fails
-        });
-  
+      const { error: sendError } = await supabase.from('messages').insert({
+        chat_id: chatId,
+        sender_id: currentUser.id,
+        receiver_id: receiverId,
+        content: newMessage.trim(),
+        is_read: false,
+      });
       if (sendError) throw sendError;
-  
       setNewMessage('');
-  
-      // Update the parent chat record
-      await supabase
-        .from('chats')
-        .update({
-          last_message: newMessage.trim(),
-          last_message_time: new Date().toISOString(),
-        })
-        .eq('id', chatId);
-        
-    } catch (err: any) {
-      console.error('Send message error:', err);
-      setError('Failed to send message. Please try again.');
+      await supabase.from('chats').update({
+        last_message: newMessage.trim(),
+        last_message_time: new Date().toISOString(),
+      }).eq('id', chatId);
+    } catch (err) {
+      setError('Message failed to send');
     } finally {
       setIsSending(false);
     }
   };
+
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -264,137 +239,76 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     <Paper
       sx={{
         position: 'fixed',
-        bottom: 20,
-        right: 20,
-        width: 400,
-        height: 500,
+        bottom: { xs: 0, sm: 20 },
+        right: { xs: 0, sm: 20 },
+        width: { xs: '100%', sm: 400 },
+        height: { xs: '100dvh', sm: 500 },
         display: 'flex',
         flexDirection: 'column',
         boxShadow: 24,
-        borderRadius: 2,
+        borderRadius: { xs: 0, sm: 2 },
         zIndex: 1300,
         overflow: 'hidden',
       }}
     >
-      {/* Chat Header */}
-      <Box
-        sx={{
-          p: 2,
-          bgcolor: 'primary.main',
-          color: 'white',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-        }}
-      >
+      {/* Header */}
+      <Box sx={{ p: 2, bgcolor: 'primary.main', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Avatar
-            sx={{
-              width: 32,
-              height: 32,
-              bgcolor: 'white',
-              color: 'primary.main',
-              fontSize: '0.875rem',
-            }}
-          >
-            {receiverName?.[0] || 'U'}
+          <Avatar sx={{ width: 32, height: 32, bgcolor: 'white', color: 'primary.main' }}>
+            {receiverName?.[0]}
           </Avatar>
           <Box>
-            <Typography variant="subtitle1" fontWeight={600}>
-              Chat with {receiverName}
-            </Typography>
-            <Typography variant="caption">
-              {caseTitle}
-            </Typography>
+            <Typography variant="subtitle1" fontWeight={600}>{receiverName}</Typography>
+            <Typography variant="caption">{caseTitle}</Typography>
           </Box>
         </Box>
-        <IconButton onClick={onClose} size="small" sx={{ color: 'white' }}>
-          <Close />
-        </IconButton>
+        <IconButton onClick={onClose} size="small" sx={{ color: 'white' }}><Close /></IconButton>
       </Box>
 
-      {/* Messages Container */}
-      <Box
-        ref={chatContainerRef}
-        sx={{
-          flex: 1,
-          overflowY: 'auto',
-          p: 2,
-          bgcolor: 'grey.50',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 1,
-        }}
-      >
+      {/* Messages */}
+      <Box ref={chatContainerRef} sx={{ flex: 1, overflowY: 'auto', p: 2, bgcolor: 'grey.50', display: 'flex', flexDirection: 'column', gap: 1 }}>
         {loading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
-            <CircularProgress size={24} />
-          </Box>
+          <Box sx={{ display: 'center', p: 3 }}><CircularProgress size={24} /></Box>
         ) : messages.length === 0 ? (
-          <Box sx={{ textAlign: 'center', p: 3 }}>
-            <Typography color="text.secondary">
-              No messages yet. Start the conversation!
-            </Typography>
-          </Box>
+          <Typography textAlign="center" color="text.secondary" sx={{ p: 3 }}>No messages yet.</Typography>
         ) : (
-          messages.map((message) => (
-            <MessageBubble
-              key={message.id}
-              message={message}
-              isOwnMessage={message.sender_id === currentUser.id}
-            />
+          messages.map((msg) => (
+            <MessageBubble key={msg.id} message={msg} isOwnMessage={msg.sender_id === currentUser.id} />
           ))
         )}
         <div ref={messagesEndRef} />
       </Box>
 
-      {/* Error Display */}
-      {error && (
-        <Alert severity="error" sx={{ mx: 2, mt: 1 }} onClose={() => setError('')}>
-          {error}
-        </Alert>
-      )}
+      {error && <Alert severity="error" sx={{ mx: 2, mt: 1 }}>{error}</Alert>}
 
-      {/* Message Input */}
-      <Box
-        component="form"
-        onSubmit={handleSendMessage}
-        sx={{
-          p: 2,
-          borderTop: 1,
-          borderColor: 'divider',
-          bgcolor: 'white',
-        }}
-      >
+      {/* Input Section */}
+      <Box component="form" onSubmit={handleSendMessage} sx={{ p: 2, borderTop: 1, borderColor: 'divider', bgcolor: 'white' }}>
+        <input 
+          type="file" 
+          hidden 
+          ref={fileInputRef} 
+          onChange={handleFileUpload} 
+          accept="image/*,application/pdf" 
+        />
         <Box sx={{ display: 'flex', gap: 1 }}>
-          <IconButton size="small" disabled>
+          <IconButton size="small" onClick={() => fileInputRef.current?.click()}>
             <AttachFile />
           </IconButton>
-          <IconButton size="small" disabled>
+          <IconButton size="small" onClick={() => fileInputRef.current?.click()}>
             <ImageIcon />
           </IconButton>
           <TextField
-            fullWidth
-            multiline
-            maxRows={3}
+            fullWidth multiline maxRows={3} size="small"
             placeholder="Type your message..."
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
             onKeyPress={handleKeyPress}
             disabled={isSending}
-            size="small"
           />
-          <IconButton
-            type="submit"
-            color="primary"
-            disabled={!newMessage.trim() || isSending}
-          >
+          <IconButton type="submit" color="primary" disabled={!newMessage.trim() || isSending}>
             {isSending ? <CircularProgress size={20} /> : <Send />}
           </IconButton>
         </Box>
-        <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
-          Press Enter to send, Shift+Enter for new line
-        </Typography>
       </Box>
     </Paper>
   );

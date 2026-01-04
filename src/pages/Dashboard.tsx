@@ -146,7 +146,7 @@ const Dashboard: React.FC = () => {
         <Grid container spacing={3} alignItems="center">
           <Grid item xs={12} md={8}>
             <Typography variant="h4" gutterBottom fontWeight={700} sx={{ color: 'orange' }}>
-              Welcome back, {userData?.name || currentUser?.user_metadata?.full_name || 'User'}!
+              Hello, {userData?.name || currentUser?.user_metadata?.full_name || 'User'}!
             </Typography>
             <Typography variant="body1" sx={{ opacity: 0.9 }}>
               Manage your lost and found cases, track items, and help others in the COMSATS community.

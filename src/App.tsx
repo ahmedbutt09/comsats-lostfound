@@ -18,7 +18,7 @@ import VerifyEmail from './pages/VerifyEmail';
 import COMSATSHeader from './components/common/COMSATSHeader';
 import COMSATSFooter from './components/common/COMSATSFooter';
 import LoadingSpinner from './components/common/LoadingSpinner';
-
+import ScrollToTop from './components/common/ScrollToTop';
 // Pages
 import Home from './pages/Home';
 import Dashboard from './pages/Dashboard';
@@ -226,9 +226,12 @@ function App() {
         />
         <AuthProvider>
           <Router>
-            <div className="App" style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-              <COMSATSHeader />
-              <main style={{ flex: 1, padding: '0' }}>
+            {/* 1. ADD IT HERE - Inside the Router, before the UI starts */}
+    <ScrollToTop /> 
+
+<div className="App" style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+  <COMSATSHeader />
+  <main style={{ flex: 1, padding: '0' }}>
                 <Routes>
                   {/* Public Routes */}
                   <Route path="/" element={<Home />} />
@@ -372,6 +375,7 @@ function App() {
             </div>
           </Router>
           
+          
           {/* React Query DevTools - Only in development */}
           {process.env.NODE_ENV === 'development' && (
             <ReactQueryDevtools initialIsOpen={false} />
@@ -381,5 +385,6 @@ function App() {
     </QueryClientProvider>
   );
 }
+
 
 export default App;

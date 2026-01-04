@@ -14,6 +14,8 @@ import {
   Table,
   TableBody,
   TableCell,
+  Tooltip,
+  IconButton,
   TableContainer,
   TableHead,
   TableRow,
@@ -71,6 +73,7 @@ interface UserBasicInfo {
   name: string;
   email: string;
   created_at?: string;
+  is_banned?: boolean;
 }
 
 const AdminDashboard: React.FC = () => {
@@ -184,6 +187,49 @@ const AdminDashboard: React.FC = () => {
     loadUsers();
   };
 
+  const handleDeleteUser = async (userId: string) => {
+    if (window.confirm('Are you sure? This will permanently delete this user profile from the database.')) {
+      try {
+        const { error } = await supabase
+          .from('users')
+          .delete()
+          .eq('id', userId);
+  
+        if (error) throw error;
+  
+        // Update UI immediately after successful DB deletion
+        setUsersList(prev => prev.filter(u => u.id !== userId));
+        setStats(prev => ({ ...prev, totalUsers: prev.totalUsers - 1 }));
+        
+        alert('User deleted successfully from database.');
+      } catch (error: any) {
+        console.error('Error deleting user:', error.message);
+        alert('Failed to delete user: ' + error.message);
+      }
+    }
+  };
+  const handleToggleBan = async (userId: string, currentStatus: boolean) => {
+    const action = currentStatus ? 'unban' : 'ban';
+    
+    if (window.confirm(`Are you sure you want to ${action} this user?`)) {
+      try {
+        const { error } = await supabase
+          .from('users')
+          .update({ is_banned: !currentStatus } as any)
+          .eq('id', userId);
+  
+        if (error) throw error;
+  
+        // Refresh the list from the database to ensure UI matches DB state
+        await loadUsers();
+        
+        alert(`User has been ${currentStatus ? 'unbanned' : 'banned'} in the database.`);
+      } catch (error: any) {
+        console.error('Error toggling ban:', error.message);
+        alert('Failed to update ban status. Did you add the is_banned column in Supabase?');
+      }
+    }
+  };
   // Logic for Cases
   const handleViewCase = (id: string) => navigate(`/case/${id}`);
   const handleEditCase = (id: string) => navigate(`/edit-case/${id}`);
@@ -289,36 +335,68 @@ const AdminDashboard: React.FC = () => {
         </TabPanel>
 
         {/* Tab 2: Users (RECTIFIED) */}
-        <TabPanel value={tabValue} index={2}>
-          {isUsersLoading ? (
-            <Box sx={{ textAlign: 'center', py: 5 }}><CircularProgress /></Box>
-          ) : (
-            <TableContainer component={Paper} variant="outlined">
-              <Table>
-                <TableHead sx={{ bgcolor: 'action.hover' }}>
-                  <TableRow>
-                    <TableCell><strong>User Name</strong></TableCell>
-                    <TableCell><strong>Email Address</strong></TableCell>
-                    <TableCell><strong>User ID</strong></TableCell>
-                    <TableCell align="right"><strong>Actions</strong></TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {usersList.map((user) => (
-                    <TableRow key={user.id}>
-                      <TableCell>{user.name}</TableCell>
-                      <TableCell>{user.email}</TableCell>
-                      <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{user.id}</TableCell>
-                      <TableCell align="right">
-                        <Button size="small" startIcon={<Email />}>Notify</Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
-        </TabPanel>
+<TabPanel value={tabValue} index={2}>
+  {isUsersLoading ? (
+    <Box sx={{ textAlign: 'center', py: 5 }}><CircularProgress /></Box>
+  ) : (
+    <TableContainer component={Paper} variant="outlined">
+      <Table>
+        <TableHead sx={{ bgcolor: 'action.hover' }}>
+          <TableRow>
+            <TableCell><strong>User</strong></TableCell>
+            <TableCell><strong>Status</strong></TableCell>
+            <TableCell><strong>User ID</strong></TableCell>
+            <TableCell align="right"><strong>Actions</strong></TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {/* We are mapping through usersList here */}
+          {usersList.map((user: any) => (
+            <TableRow key={user.id}>
+              <TableCell>
+                <Typography variant="body2" fontWeight={600}>{user.name}</Typography>
+                <Typography variant="caption" color="text.secondary">{user.email}</Typography>
+              </TableCell>
+              <TableCell>
+                <Chip 
+                  label={user.is_banned ? "Banned" : "Active"} 
+                  size="small" 
+                  color={user.is_banned ? "error" : "success"} 
+                />
+              </TableCell>
+              <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.65rem' }}>
+                {user.id.substring(0, 8)}...
+              </TableCell>
+              <TableCell align="right">
+                {/* BAN BUTTON */}
+                <Tooltip title={user.is_banned ? "Unban User" : "Ban User"}>
+                  <IconButton 
+                    size="small" 
+                    color={user.is_banned ? "success" : "warning"}
+                    onClick={() => handleToggleBan(user.id, user.is_banned)}
+                  >
+                    <Security fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+                
+                {/* DELETE BUTTON */}
+                <Tooltip title="Delete User Profile">
+                  <IconButton 
+                    size="small" 
+                    color="error" 
+                    onClick={() => handleDeleteUser(user.id)}
+                  >
+                    <Delete fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </TableContainer>
+  )}
+</TabPanel>
 
         {/* Tab 3: Settings (RECTIFIED) */}
         <TabPanel value={tabValue} index={3}>
