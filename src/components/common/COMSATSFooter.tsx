@@ -135,9 +135,18 @@ const COMSATSFooter: React.FC = () => {
             <Link component={RouterLink} to="/terms-of-use" sx={{ color: 'rgba(255,255,255,0.4)', textDecoration: 'none', fontSize: '0.75rem' }}>
               Terms of Use
             </Link>
-            <Link component={RouterLink} to="/privacy-policy" sx={{ color: 'rgba(255,255,255,0.4)', textDecoration: 'none', fontSize: '0.75rem' }}>
-              Privacy Policy
-            </Link>
+            <Link 
+  component={RouterLink} 
+  to="/privacy-policy" 
+  sx={{ 
+    color: 'rgba(255,255,255,0.4)', 
+    textDecoration: 'none', 
+    fontSize: '0.75rem',
+    '&:hover': { color: '#ffb74d' } 
+  }}
+>
+  Privacy Policy
+</Link>
           </Stack>
         </Box>
       </Container>
