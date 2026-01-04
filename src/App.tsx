@@ -49,6 +49,7 @@ import ResetPassword from './pages/ResetPassword';
 import EditCase from './pages/EditCase';
 import NotFound from './pages/NotFound';
 
+// Theme Configuration
 const theme = createTheme({
   palette: {
     primary: { main: '#1a237e' },
@@ -94,11 +95,12 @@ function AppContent() {
 
   React.useEffect(() => {
     const setupDeepLinks = async () => {
+      // Listen for when the app is opened via comsatsapp://login
       CapApp.addListener('appUrlOpen', async (data: any) => {
         console.log('App opened with URL:', data.url);
         
         if (data.url.includes('comsatsapp://')) {
-          // Parse tokens from URL hash
+          // Parse tokens from URL hash (Google returns tokens after the #)
           const url = new URL(data.url.replace('comsatsapp://', 'https://placeholder.com/'));
           const hash = url.hash.substring(1);
 
@@ -108,13 +110,16 @@ function AppContent() {
             const refresh_token = params.get('refresh_token');
 
             if (access_token && refresh_token) {
-              // 1. Manually set Supabase session
-              await supabase.auth.setSession({ access_token, refresh_token });
+              // 1. Manually set Supabase session into storage
+              await supabase.auth.setSession({ 
+                access_token, 
+                refresh_token 
+              });
               
-              // 2. Wake up AuthContext to fetch profile/remove spinner
+              // 2. Refresh AuthContext to fetch user profile and remove loading states
               await refreshSession();
               
-              // 3. Force navigation to dashboard
+              // 3. Navigate to dashboard using HashRouter compatibility
               window.location.hash = '/dashboard';
             }
           }
@@ -123,7 +128,11 @@ function AppContent() {
     };
 
     setupDeepLinks();
-    return () => { CapApp.removeAllListeners(); };
+    
+    // Cleanup listeners on unmount
+    return () => { 
+      CapApp.removeAllListeners(); 
+    };
   }, [refreshSession]);
 
   return (
@@ -131,6 +140,7 @@ function AppContent() {
       <COMSATSHeader />
       <main style={{ flex: 1, padding: '0' }}>
         <Routes>
+          {/* Publicly Accessible Pages */}
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
           <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
@@ -145,7 +155,7 @@ function AppContent() {
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           
-          {/* Protected Routes */}
+          {/* Protected Routes (Logged in users only) */}
           <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
           <Route path="/report" element={<PrivateRoute><ReportCase /></PrivateRoute>} />
           <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
@@ -155,11 +165,12 @@ function AppContent() {
           <Route path="/messages" element={<PrivateRoute><Messages /></PrivateRoute>} />
           <Route path="/chat/:caseId" element={<PrivateRoute><ChatWindowWrapper /></PrivateRoute>} />
           
-          {/* Admin Routes */}
+          {/* Admin Routes (Admin role only) */}
           <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
           <Route path="/admin/cases" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
           <Route path="/admin/users" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
           
+          {/* Fallback 404 Route */}
           <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
@@ -173,12 +184,19 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider theme={theme}>
         <CssBaseline />
-        <Toaster position="top-right" />
+        <Toaster 
+          position="top-right" 
+          toastOptions={{
+            duration: 4000,
+            style: { background: '#333', color: '#fff' }
+          }} 
+        />
         <AuthProvider>
           <Router>
             <ScrollToTop /> 
             <AppContent />
           </Router>
+          {/* Only show DevTools in development mode */}
           {process.env.NODE_ENV === 'development' && <ReactQueryDevtools initialIsOpen={false} />}
         </AuthProvider>
       </ThemeProvider>

@@ -15,7 +15,7 @@ interface AuthContextType {
   updateProfile: (updates: Partial<User>) => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   updatePassword: (newPassword: string) => Promise<void>;
-  refreshSession: () => Promise<void>; // Added to interface
+  refreshSession: () => Promise<void>; 
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -26,7 +26,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
 
-  // FETCH PROFILE LOGIC
+  // FETCH PROFILE LOGIC - Auto-creates profile if it doesn't exist (Google Login)
   const fetchProfile = useCallback(async (userId: string, email?: string, metadata?: any) => {
     try {
       let { data: profile } = await supabase
@@ -64,7 +64,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, []);
 
-  // HANDLE SESSION (Moved to top level to avoid Scope/Hoisting errors)
+  // HANDLE SESSION
   const handleUserSession = useCallback(async (session: any) => {
     setLoading(true);
     if (!session?.user) {
@@ -96,7 +96,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setLoading(false);
   }, [fetchProfile]);
 
-  // REFRESH SESSION (The fix for the APK hang)
+  // REFRESH SESSION (Crucial for deep links returning from browser)
   const refreshSession = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession();
     await handleUserSession(session);
@@ -118,51 +118,54 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
   }, [handleUserSession]);
 
-  // ... (keep login, register, logout, etc. from your previous version)
-  const login = async (email: string, password: string) => {
-    setLoading(true);
-    try {
-      const result = await authService.signIn(email, password);
-      setCurrentUser(result.user);
-      setUserData(result.userData);
-      setIsAdmin(result.userData?.role === 'admin');
-    } finally { setLoading(false); }
-  };
-
-  const logout = async () => {
-    setLoading(true);
-    try {
-      await authService.signOut();
-      setCurrentUser(null);
-      setUserData(null);
-      setIsAdmin(false);
-    } finally { setLoading(false); }
-  };
-
-  const signInWithGoogle = async () => {
-    try {
-      await authService.signInWithGoogle();
-    } catch (e) {
-      throw e;
-    }
-  };
-
   const value = {
-    currentUser, userData, loading, isAdmin,
-    login, logout, signInWithGoogle, refreshSession,
-    register: async (e: string, p: string, n: string, d?: any) => {
+    currentUser, 
+    userData, 
+    loading, 
+    isAdmin,
+    login: async (email: string, password: string) => {
         setLoading(true);
-        try { const res = await authService.signUp(e,p,n,d); setCurrentUser(res.user); }
-        finally { setLoading(false); }
+        try {
+          const result = await authService.signIn(email, password);
+          setCurrentUser(result.user);
+          setUserData(result.userData);
+          setIsAdmin(result.userData?.role === 'admin');
+        } finally { setLoading(false); }
+    }, 
+    logout: async () => {
+        setLoading(true);
+        try {
+          await authService.signOut();
+          setCurrentUser(null);
+          setUserData(null);
+          setIsAdmin(false);
+        } finally { setLoading(false); }
+    }, 
+    signInWithGoogle: async () => {
+        try {
+          await authService.signInWithGoogle();
+        } catch (e) {
+          throw e;
+        }
+    }, 
+    refreshSession,
+    register: async (email: string, password: string, name: string, additionalData?: any) => {
+        setLoading(true);
+        try { 
+            const res = await authService.signUp(email, password, name, additionalData); 
+            setCurrentUser(res.user); 
+        } finally { setLoading(false); }
     },
-    updateProfile: async (u: any) => {
+    updateProfile: async (updates: any) => {
         if (!currentUser) return;
         setLoading(true);
-        try { const res = await authService.updateProfile(currentUser.id, u); if (res) setUserData(res); }
-        finally { setLoading(false); }
+        try { 
+            const res = await authService.updateProfile(currentUser.id, updates); 
+            if (res) setUserData(res); 
+        } finally { setLoading(false); }
     },
-    resetPassword: async (e: string) => { await authService.resetPassword(e); },
-    updatePassword: async (p: string) => { await authService.updatePassword(p); }
+    resetPassword: async (email: string) => { await authService.resetPassword(email); },
+    updatePassword: async (password: string) => { await authService.updatePassword(password); }
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

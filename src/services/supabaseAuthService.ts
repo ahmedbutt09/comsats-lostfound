@@ -1,10 +1,10 @@
-// src/services/supabaseAuthService.ts
 import { supabase } from '../lib/supabaseClient';
 import { User } from '../types';
 import { prepareSupabaseData, toCamelCase } from '../utils/helpers';
 import toast from 'react-hot-toast';
 import { Browser } from '@capacitor/browser';
 import { Capacitor } from '@capacitor/core';
+
 export const authService = {
   /**
    * Sign in with email and password
@@ -29,7 +29,6 @@ export const authService = {
     } catch (error: any) {
       console.error('Sign in error:', error);
       
-      // User-friendly error messages
       let message = 'Login failed';
       if (error.message.includes('Invalid login credentials')) {
         message = 'Invalid email or password';
@@ -45,7 +44,6 @@ export const authService = {
 
   /**
    * Sign up new user
-   * Note: If Email Templates in Supabase use {{ .Token }}, this triggers an OTP.
    */
   async signUp(
     email: string, 
@@ -82,15 +80,14 @@ export const authService = {
   },
 
   /**
-   * Verify Sign Up OTP (Email Verification)
-   * Added this to handle 6-digit code verification for new accounts
+   * Verify Sign Up OTP (8-digit code)
    */
   async verifySignUpOTP(email: string, token: string) {
     try {
       const { data, error } = await supabase.auth.verifyOtp({
         email: email.trim().toLowerCase(),
         token: token,
-        type: 'signup', // Use 'signup' for email verification
+        type: 'signup',
       });
 
       if (error) throw error;
@@ -102,11 +99,12 @@ export const authService = {
   },
 
   /**
- * Sign in with Google OAuth
- */
+   * Sign in with Google OAuth (Fixed for Web & APK)
+   */
   async signInWithGoogle() {
     const isNative = Capacitor.isNativePlatform();
     
+    // APK uses custom scheme, Web uses the production Vercel URL
     const redirectTo = isNative 
       ? 'comsatsapp://login' 
       : 'https://comsats-lostfound.vercel.app/';
@@ -115,21 +113,18 @@ export const authService = {
       provider: 'google',
       options: {
         redirectTo: redirectTo,
-        skipBrowserRedirect: isNative, // This prevents the 403 error
+        skipBrowserRedirect: isNative, // true for APK prevents 403 error
       },
     });
   
     if (error) throw error;
   
-    // This opens the secure Chrome browser on the phone
+    // For APK: Manually open the secure System Browser
     if (isNative && data?.url) {
       await Browser.open({ url: data.url });
     }
   },
 
-  /**
-   * Sign out current user
-   */
   async signOut() {
     try {
       const { error } = await supabase.auth.signOut();
@@ -141,9 +136,6 @@ export const authService = {
     }
   },
 
-  /**
-   * Get current session
-   */
   async getSession() {
     try {
       const { data: { session }, error } = await supabase.auth.getSession();
@@ -155,9 +147,6 @@ export const authService = {
     }
   },
 
-  /**
-   * Get current user
-   */
   async getCurrentUser() {
     try {
       const { data: { user }, error } = await supabase.auth.getUser();
@@ -169,9 +158,6 @@ export const authService = {
     }
   },
 
-  /**
-   * Get user profile from database
-   */
   async getUserProfile(userId: string) {
     try {
       const { data, error } = await supabase
@@ -188,13 +174,9 @@ export const authService = {
     }
   },
 
-  /**
-   * Update user profile
-   */
   async updateProfile(userId: string, updates: Partial<User>) {
     try {
       const snakeCaseUpdates = prepareSupabaseData(updates);
-      
       const { data, error } = await supabase
         .from('users')
         .update(snakeCaseUpdates)
@@ -217,41 +199,28 @@ export const authService = {
     }
   },
 
-  /**
-   * Reset password - send reset email
-   */
-  // Add these to your authService object in src/services/supabaseAuthService.ts
-
-  /**
-   * Reset password Step 1: Send a 6-digit OTP code to the email
-   */
   async resetPassword(email: string) {
     const { error } = await supabase.auth.resetPasswordForEmail(email);
     if (error) throw error;
     return true;
   },
 
-  /**
-   * Reset password Step 2: Verify the -digit code
-   */
   async verifyResetOTP(email: string, token: string) {
     try {
       const { data, error } = await supabase.auth.verifyOtp({
         email: email.trim().toLowerCase(),
         token: token,
-        type: 'recovery', // Important: use 'recovery' for password resets
+        type: 'recovery',
       });
 
       if (error) throw error;
-      return data; // This will create a session so the user can now update password
+      return data;
     } catch (error: any) {
       console.error('OTP Verification error:', error);
       throw new Error(error.message || 'Invalid or expired code');
     }
   },
-  /**
-   * Update password (after reset)
-   */
+
   async updatePassword(newPassword: string) {
     try {
       const { error } = await supabase.auth.updateUser({
@@ -266,9 +235,6 @@ export const authService = {
     }
   },
 
-  /**
-   * Check if user is admin
-   */
   async isAdmin(userId: string): Promise<boolean> {
     try {
       const profile = await this.getUserProfile(userId);
@@ -279,21 +245,13 @@ export const authService = {
     }
   },
 
-  /**
-   * Setup first admin user (for initial setup)
-   */
   async setupFirstAdmin(email: string, password: string, name: string) {
     try {
-      // Call the signUp method
       const result = await this.signUp(email, password, name, { role: 'admin' });
-      
-      // If we got here, auth was created. 
-      // result.user will exist even if session is null (email confirmation pending)
       if (!result || !result.user) {
         throw new Error('Failed to create admin user account');
       }
-
-      toast.success('Admin created! Please check your email if confirmation is required.');
+      toast.success('Admin created! Please check your email.');
       return result.user;
     } catch (error: any) {
       console.error('Setup admin error:', error);
@@ -301,18 +259,12 @@ export const authService = {
     }
   },
 
-  /**
-   * Listen to auth state changes
-   */
   onAuthStateChange(callback: (event: string, session: any) => void) {
     return supabase.auth.onAuthStateChange((event, session) => {
       callback(event, session);
     });
   },
 
-  /**
-   * Check if email exists
-   */
   async checkEmailExists(email: string): Promise<boolean> {
     try {
       const { data, error } = await supabase
@@ -329,9 +281,6 @@ export const authService = {
     }
   },
 
-  /**
-   * Verify email
-   */
   async verifyEmail(token: string) {
     try {
       const { data, error } = await supabase.auth.verifyOtp({
@@ -347,15 +296,11 @@ export const authService = {
     }
   },
 
-  /**
-   * Resend verification email
-   */
   async resendVerificationEmail(email: string) {
     try {
       const { error } = await supabase.auth.resend({
-        type: 'signup', // Use 'signup' for registration OTP
+        type: 'signup',
         email: email.trim().toLowerCase(),
-        // Removed emailRedirectTo because OTPs don't need a redirect URL
       });
 
       if (error) throw error;

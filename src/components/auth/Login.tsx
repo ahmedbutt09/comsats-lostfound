@@ -21,8 +21,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useAuth } from '../../contexts/AuthContext';
 import toast from 'react-hot-toast';
-import { supabase } from '../../lib/supabaseClient';
-// UPDATED: Standard email schema that allows any valid email domain
+
 const loginSchema = z.object({
   email: z.string()
     .min(1, 'Email is required')
@@ -59,21 +58,14 @@ const Login: React.FC = () => {
     try {
       setLoading(true);
       await login(data.email, data.password);
-      
-      // If login is successful, the AuthContext updates and App.tsx 
-      // handles the redirect. But we can add a safety check:
       toast.success('Logged in successfully!');
       navigate('/dashboard');
-      
     } catch (error: any) {
       console.error('Login error:', error);
-      
       let errorMessage = 'Login failed';
       
-      // CHECK FOR UNVERIFIED EMAIL
       if (error.message?.includes('Email not confirmed')) {
         toast.error('Email not verified yet.');
-        // Redirect to the verify page so they know what to do
         navigate('/verify-email', { state: { email: data.email } });
         return;
       } 
@@ -91,13 +83,15 @@ const Login: React.FC = () => {
   };
 
   const handleGoogleSignIn = async () => {
-    setGoogleLoading(true);
-    await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: 'comsatsapp://login' // This MUST match the Supabase dashboard entry
-      }
-    });
+    try {
+      setGoogleLoading(true);
+      await signInWithGoogle();
+    } catch (error: any) {
+      console.error('Google Sign-In Error:', error);
+      toast.error('Google Sign-In failed');
+    } finally {
+      setGoogleLoading(false);
+    }
   };
 
   const handleClickShowPassword = () => setShowPassword(!showPassword);
