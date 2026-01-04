@@ -58,6 +58,10 @@ dependencies {
     implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
     implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    
+    // ADD THIS LINE TO FIX THE API 36 / GRADLE 8.9 ERROR
+    implementation "androidx.browser:browser:1.8.0"
+
     implementation project(':capacitor-android')
     implementation project(':capacitor-cordova-android-plugins')
 
