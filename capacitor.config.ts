@@ -4,7 +4,11 @@ const config: CapacitorConfig = {
   appId: 'com.findit.app',
   appName: 'COMSATS LOST & FOUND',
   webDir: 'build',
-  // Add the plugins section below
+  // ADD THIS BLOCK
+  server: {
+    androidScheme: 'https',
+    allowNavigation: ['*']
+  },
   plugins: {
     SplashScreen: {
       launchShowDuration: 3000,
