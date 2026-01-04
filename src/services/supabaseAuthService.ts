@@ -101,18 +101,19 @@ export const authService = {
   },
 
   /**
-   * Sign in with Google OAuth
-   */
-  async signInWithGoogle() {
-    const { data, error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: 'http://localhost:3000/#/' 
-      },
-    });
-    if (error) throw error;
-    return data;
-  },
+ * Sign in with Google OAuth
+ */
+async signInWithGoogle() {
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      // This dynamically grabs the current site URL (Vercel or Localhost)
+      redirectTo: `${window.location.origin}/#/`, 
+    },
+  });
+  if (error) throw error;
+  return data;
+},
 
   /**
    * Sign out current user
