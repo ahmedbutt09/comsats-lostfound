@@ -3,7 +3,8 @@ import { supabase } from '../lib/supabaseClient';
 import { User } from '../types';
 import { prepareSupabaseData, toCamelCase } from '../utils/helpers';
 import toast from 'react-hot-toast';
-
+import { Browser } from '@capacitor/browser';
+import { Capacitor } from '@capacitor/core';
 export const authService = {
   /**
    * Sign in with email and password
@@ -104,19 +105,26 @@ export const authService = {
  * Sign in with Google OAuth
  */
   async signInWithGoogle() {
+    const isNative = Capacitor.isNativePlatform();
+    
+    const redirectTo = isNative 
+      ? 'comsatsapp://login' 
+      : 'https://comsats-lostfound.vercel.app/';
+  
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        // THIS IS THE KEY: Hardcode your Vercel URL here
-        redirectTo: 'https://comsats-lostfound.vercel.app/', 
-        queryParams: {
-          access_type: 'offline',
-          prompt: 'consent',
-        },
+        redirectTo: redirectTo,
+        skipBrowserRedirect: isNative, // This prevents the 403 error
       },
     });
+  
     if (error) throw error;
-    return data;
+  
+    // This opens the secure Chrome browser on the phone
+    if (isNative && data?.url) {
+      await Browser.open({ url: data.url });
+    }
   },
 
   /**
