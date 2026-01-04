@@ -13,7 +13,7 @@ import SetupAdmin from './pages/SetupAdmin';
 import AdminRoute from './components/auth/AdminRoute';
 import Login from './components/auth/Login';
 import Register from './components/auth/Register';
-
+import VerifyEmail from './pages/VerifyEmail';
 // Common Components
 import COMSATSHeader from './components/common/COMSATSHeader';
 import COMSATSFooter from './components/common/COMSATSFooter';
@@ -29,7 +29,8 @@ import Profile from './pages/Profile';
 import MyCases from './pages/MyCases';
 import CaseDetails from './pages/CaseDetails';
 import AdminDashboard from './pages/AdminDashboard';
-
+import TermsOfUse from './pages/TermsOfUse';
+import PrivacyPolicy from './pages/PrivacyPolicy';
 // Chat Pages (create these or comment out if not ready)
 import Chat from './pages/Chat';
 import Messages from './pages/Messages';
@@ -143,40 +144,34 @@ const theme = createTheme({
 const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { currentUser, loading } = useAuth();
   
-  if (loading) {
-    return (
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        height: '60vh' 
-      }}>
-        <LoadingSpinner message="Checking authentication..." />
-      </div>
-    );
+  if (loading) return <LoadingSpinner message="Checking authentication..." />;
+  
+  // 1. If no user at all, go to login
+  if (!currentUser) return <Navigate to="/login" />;
+
+  // 2. Allow if email is confirmed OR if provider is Google
+  const isGoogleUser = currentUser.app_metadata?.provider === 'google';
+  const isConfirmed = currentUser.email_confirmed_at || isGoogleUser;
+
+  if (!isConfirmed) {
+    return <Navigate to="/verify-email" />;
   }
   
-  return currentUser ? <>{children}</> : <Navigate to="/login" />;
+  return <>{children}</>;
 };
 
 // Public Route Wrapper (redirects if already logged in)
 const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { currentUser, loading } = useAuth();
   
-  if (loading) {
-    return (
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        height: '60vh' 
-      }}>
-        <LoadingSpinner />
-      </div>
-    );
+  if (loading) return <LoadingSpinner />;
+  
+  const isGoogleUser = currentUser?.app_metadata?.provider === 'google';
+  if (currentUser && (currentUser.email_confirmed_at || isGoogleUser)) {
+    return <Navigate to="/dashboard" />;
   }
   
-  return !currentUser ? <>{children}</> : <Navigate to="/dashboard" />;
+  return <>{children}</>;
 };
 
 // Query Client Configuration
@@ -255,13 +250,14 @@ function App() {
                       </PublicRoute>
                     } 
                   />
-                  
+                  <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+                  <Route path="/terms-of-use" element={<TermsOfUse />} />
                   <Route path="/admin-login" element={<AdminLogin />} />
                   <Route path="/setup-admin" element={<SetupAdmin />} />
                   <Route path="/lost" element={<LostItems />} />
                   <Route path="/found" element={<FoundItems />} />
                   <Route path="/case/:id" element={<CaseDetails />} />
-                  
+                  <Route path="/verify-email" element={<VerifyEmail />} />
                   {/* Password Reset Routes */}
                   <Route path="/forgot-password" element={<ForgotPassword />} />
                   <Route path="/reset-password" element={<ResetPassword />} />

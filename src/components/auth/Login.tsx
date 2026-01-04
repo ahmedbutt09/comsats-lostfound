@@ -59,17 +59,28 @@ const Login: React.FC = () => {
     try {
       setLoading(true);
       await login(data.email, data.password);
+      
+      // If login is successful, the AuthContext updates and App.tsx 
+      // handles the redirect. But we can add a safety check:
       toast.success('Logged in successfully!');
       navigate('/dashboard');
+      
     } catch (error: any) {
       console.error('Login error:', error);
       
       let errorMessage = 'Login failed';
-      if (error.message.includes('Invalid login credentials')) {
+      
+      // CHECK FOR UNVERIFIED EMAIL
+      if (error.message?.includes('Email not confirmed')) {
+        toast.error('Email not verified yet.');
+        // Redirect to the verify page so they know what to do
+        navigate('/verify-email', { state: { email: data.email } });
+        return;
+      } 
+      
+      if (error.message?.includes('Invalid login credentials')) {
         errorMessage = 'Invalid email or password';
-      } else if (error.message.includes('Email not confirmed')) {
-        errorMessage = 'Please verify your email address before logging in';
-      } else if (error.message.includes('too many requests')) {
+      } else if (error.message?.includes('too many requests')) {
         errorMessage = 'Too many login attempts. Please try again later';
       }
       

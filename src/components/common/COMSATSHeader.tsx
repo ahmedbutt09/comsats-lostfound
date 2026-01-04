@@ -13,220 +13,225 @@ import {
   Divider,
   useMediaQuery,
   Badge,
-  Collapse, // Added for smoother mobile menu
+  Collapse,
+  Tooltip,
+  Fade,
+  Chip
 } from '@mui/material';
-import { useTheme } from '@mui/material/styles';
+import { useTheme, alpha } from '@mui/material/styles';
 import {
   Menu as MenuIcon,
-  Close as CloseIcon, // Added for mobile toggle
-  Notifications,
+  Close as CloseIcon,
   Person,
   ExitToApp,
   Dashboard,
   FindInPage,
   Home,
-  Chat as ChatIcon
+  Chat as ChatIcon,
+  AddCircle,
+  Search,
+  AdminPanelSettings,
+  History
 } from '@mui/icons-material';
-import { Link as RouterLink, useNavigate } from 'react-router-dom';
+import { Link as RouterLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabaseClient';
 
-// Helper function
-const getUnreadCount = async (userId: string): Promise<number> => {
-  try {
-    const { error, count } = await supabase
-      .from('messages')
-      .select('id', { count: 'exact', head: true })
-      .eq('receiver_id', userId)
-      .eq('is_read', false);
-
-    if (error) throw error;
-    return count || 0;
-  } catch (error) {
-    console.error('Error getting unread count:', error);
-    return 0;
-  }
-};
-
 const COMSATSHeader: React.FC = () => {
-  // Separate state for User Menu vs Mobile Navigation
-  const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
-  const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
   
   const { currentUser, userData, logout, isAdmin } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-  const [unreadCount, setUnreadCount] = useState(0);
 
-  // Handlers for User Profile Menu
-  const handleProfileMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
-    setAnchorEl(event.currentTarget);
-  };
+  const isActive = (path: string) => location.pathname === path;
 
-  const handleProfileMenuClose = () => {
-    setAnchorEl(null);
-  };
-
-  // Handlers for Mobile Nav Toggle
-  const toggleMobileMenu = () => {
-    setMobileMenuOpen(!mobileMenuOpen);
-  };
-
-  const loadUnreadCount = async () => {
-    if (!currentUser?.id) return;
-    const count = await getUnreadCount(currentUser.id);
-    setUnreadCount(count);
-  };
-
+  // Real-time unread messages logic (kept from your original)
   useEffect(() => {
-    if (!currentUser?.id) {
-      setUnreadCount(0);
-      return;
-    }
-    loadUnreadCount();
-    
-    const channel = supabase
-      .channel('header_messages')
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'messages',
-        filter: `receiver_id=eq.${currentUser.id}`,
-      }, () => loadUnreadCount())
-      .subscribe();
-
-    const interval = setInterval(loadUnreadCount, 30000);
-    return () => {
-      supabase.removeChannel(channel);
-      clearInterval(interval);
+    if (!currentUser?.id) return;
+    const loadUnreadCount = async () => {
+      const { count } = await supabase
+        .from('messages')
+        .select('id', { count: 'exact', head: true })
+        .eq('receiver_id', currentUser.id)
+        .eq('is_read', false);
+      setUnreadCount(count || 0);
     };
+    loadUnreadCount();
+    const channel = supabase.channel('header_msgs').on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `receiver_id=eq.${currentUser.id}` }, loadUnreadCount).subscribe();
+    return () => { supabase.removeChannel(channel); };
   }, [currentUser?.id]);
 
-  const handleLogout = async () => {
-    handleProfileMenuClose();
-    try {
-      await logout();
-      navigate('/');
-    } catch (error) {
-      console.error('Logout error:', error);
-    }
-  };
+  const navLinks = [
+    { label: 'Browse Lost', path: '/lost', icon: <Search fontSize="small" /> },
+    { label: 'Browse Found', path: '/found', icon: <FindInPage fontSize="small" /> },
+  ];
 
   return (
-    <AppBar position="sticky" sx={{ backgroundColor: '#1a237e', backgroundImage: 'linear-gradient(135deg, #1a237e 0%, #283593 100%)' }}>
+    <AppBar 
+      position="sticky" 
+      elevation={0}
+      sx={{ 
+        background: '#1a237e',
+        borderBottom: '2px solid #ff6f00', // Subtle COMSATS Orange accent
+      }}
+    >
       <Container maxWidth="xl">
-        <Toolbar disableGutters sx={{ py: 1 }}>
+        <Toolbar disableGutters sx={{ minHeight: { xs: 70, md: 80 } }}>
           
-          {/* Logo Section */}
-          <Box sx={{ display: 'flex', alignItems: 'center', mr: 4 }}>
-            <FindInPage sx={{ mr: 1, fontSize: 32, color: '#ff6f00' }} />
-            <Typography variant="h6" noWrap component={RouterLink} to="/" sx={{ fontWeight: 700, color: 'white', textDecoration: 'none', lineHeight: 1.2 }}>
-              CUI ABBOTTABAD
-              <Typography component="span" sx={{ display: 'block', fontSize: '0.875rem', fontWeight: 400, color: 'rgba(255,255,255,0.9)' }}>
-                Lost & Found App
-              </Typography>
-            </Typography>
+          {/* LOGO AREA */}
+          <Box sx={{ display: 'flex', alignItems: 'center', flexGrow: { xs: 1, md: 0 }, mr: 4 }}>
+             <RouterLink to="/" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none' }}>
+                <Avatar 
+                    src="/comsats-logo.png" // Assumes you have your logo in public folder
+                    sx={{ width: 45, height: 45, mr: 1.5, border: '1px solid white' }}
+                >
+                    CUI
+                </Avatar>
+                <Box>
+                    <Typography variant="h6" sx={{ fontWeight: 800, color: 'white', lineHeight: 1 }}>
+                        CUI ABBOTTABAD
+                    </Typography>
+                    <Typography sx={{ fontSize: '0.75rem', color: '#ffb74d', fontWeight: 600 }}>
+                        Lost & Found Portal
+                    </Typography>
+                </Box>
+             </RouterLink>
           </Box>
 
-          {/* Desktop Nav */}
+          {/* DESKTOP NAV - Enhanced with Active Indicators */}
           {!isMobile && (
-            <Box sx={{ display: 'flex', gap: 1, flexGrow: 1 }}>
-              <Button component={RouterLink} to="/" startIcon={<Home />} sx={{ color: 'white' }}>Home</Button>
-              <Button component={RouterLink} to="/lost" startIcon={<FindInPage />} sx={{ color: 'white' }}>Lost Items</Button>
-              <Button component={RouterLink} to="/found" startIcon={<FindInPage />} sx={{ color: 'white' }}>Found Items</Button>
-              <Button component={RouterLink} to="/report" startIcon={<FindInPage />} sx={{ color: 'white' }}>Report Case</Button>
-              {currentUser && isAdmin && (
-                <Button color="inherit" component={RouterLink} to="/admin" startIcon={<Dashboard />} sx={{ color: 'white', ml: 1 }}>Admin</Button>
-              )}
+            <Box sx={{ display: 'flex', gap: 1, flexGrow: 1, alignItems: 'center' }}>
+              <Button 
+                component={RouterLink} to="/" 
+                sx={{ color: isActive('/') ? '#ffb74d' : 'white', fontWeight: isActive('/') ? 700 : 400 }}
+              >
+                Home
+              </Button>
+              
+              {navLinks.map((link) => (
+                <Button
+                  key={link.path}
+                  component={RouterLink}
+                  to={link.path}
+                  sx={{
+                    color: isActive(link.path) ? '#ffb74d' : 'white',
+                    fontWeight: isActive(link.path) ? 700 : 400,
+                    '&:after': isActive(link.path) ? {
+                        content: '""',
+                        position: 'absolute',
+                        bottom: 5,
+                        left: '20%',
+                        width: '60%',
+                        height: '2px',
+                        backgroundColor: '#ffb74d'
+                    } : {}
+                  }}
+                >
+                  {link.label}
+                </Button>
+              ))}
+
+              {/* ACTION BUTTON - Highlighted for visibility */}
+              <Button 
+                variant="contained" 
+                component={RouterLink} 
+                to="/report"
+                startIcon={<AddCircle />}
+                sx={{ 
+                    ml: 2, 
+                    bgcolor: '#ff6f00', 
+                    borderRadius: '20px',
+                    '&:hover': { bgcolor: '#e65100' } 
+                }}
+              >
+                Report Case
+              </Button>
             </Box>
           )}
 
-          {/* Right Side Tools */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1, md: 2 } }}>
+          {/* RIGHT SIDE - User/Auth */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             {currentUser && (
               <IconButton color="inherit" component={RouterLink} to="/chat">
-                <Badge badgeContent={unreadCount} color="error"><ChatIcon /></Badge>
+                <Badge badgeContent={unreadCount} color="error">
+                  <ChatIcon />
+                </Badge>
               </IconButton>
             )}
 
             {currentUser ? (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Avatar
-                  sx={{ width: 36, height: 36, bgcolor: '#ff6f00', cursor: 'pointer' }}
-                  onClick={handleProfileMenuOpen}
+              <>
+                <Chip
+                    avatar={<Avatar src={userData?.avatar_url}>{userData?.name?.[0]}</Avatar>}
+                    label={isMobile ? "" : (userData?.name || "User")}
+                    onClick={(e) => setAnchorEl(e.currentTarget)}
+                    sx={{ 
+                        bgcolor: 'rgba(255,255,255,0.1)', 
+                        color: 'white', 
+                        cursor: 'pointer',
+                        '& .MuiChip-label': { display: isMobile ? 'none' : 'block' }
+                    }}
+                />
+                <Menu
+                    anchorEl={anchorEl}
+                    open={Boolean(anchorEl)}
+                    onClose={() => setAnchorEl(null)}
+                    PaperProps={{ sx: { mt: 1, width: 200 } }}
                 >
-                  {userData?.name?.[0] || currentUser?.email?.[0]?.toUpperCase()}
-                </Avatar>
-                {!isMobile && (
-                  <Typography variant="body2" sx={{ color: 'white' }}>
-                    {userData?.name || currentUser?.email?.split('@')[0]}
-                  </Typography>
-                )}
-              </Box>
+                    <MenuItem component={RouterLink} to="/dashboard" onClick={() => setAnchorEl(null)}>
+                        <Dashboard sx={{ mr: 1 }} fontSize="small" /> Dashboard
+                    </MenuItem>
+                    <MenuItem component={RouterLink} to="/my-cases" onClick={() => setAnchorEl(null)}>
+                        <History sx={{ mr: 1 }} fontSize="small" /> My Cases
+                    </MenuItem>
+                    {isAdmin && (
+                        <MenuItem component={RouterLink} to="/admin" onClick={() => setAnchorEl(null)}>
+                            <AdminPanelSettings sx={{ mr: 1, color: 'orange' }} fontSize="small" /> Admin Console
+                        </MenuItem>
+                    )}
+                    <Divider />
+                    <MenuItem onClick={async () => { await logout(); navigate('/'); }}>
+                        <ExitToApp sx={{ mr: 1 }} fontSize="small" /> Logout
+                    </MenuItem>
+                </Menu>
+              </>
             ) : (
               <Box sx={{ display: 'flex', gap: 1 }}>
-                <Button component={RouterLink} to="/login" variant="outlined" sx={{ color: 'white', borderColor: 'rgba(255,255,255,0.3)' }}>Login</Button>
-                {!isMobile && <Button component={RouterLink} to="/register" variant="contained" sx={{ bgcolor: '#ff6f00' }}>Register</Button>}
+                <Button component={RouterLink} to="/login" sx={{ color: 'white' }}>Login</Button>
+                {!isMobile && (
+                    <Button component={RouterLink} to="/register" variant="outlined" sx={{ color: '#ffb74d', borderColor: '#ffb74d' }}>
+                        Join Now
+                    </Button>
+                )}
               </Box>
             )}
 
             {isMobile && (
-              <IconButton color="inherit" onClick={toggleMobileMenu}>
+              <IconButton color="inherit" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
                 {mobileMenuOpen ? <CloseIcon /> : <MenuIcon />}
               </IconButton>
             )}
           </Box>
-
-          {/* User Profile Dropdown Menu */}
-          <Menu
-            id="user-menu"
-            anchorEl={anchorEl}
-            open={Boolean(anchorEl)}
-            onClose={handleProfileMenuClose}
-            disableScrollLock // Prevents layout shift on open
-            PaperProps={{ sx: { mt: 1.5, minWidth: 200, boxShadow: theme.shadows[3] } }}
-            anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-            transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-          >
-            <MenuItem disabled sx={{ opacity: "1 !important" }}>
-              <Box>
-                <Typography variant="subtitle2" noWrap>{userData?.name || 'User'}</Typography>
-                <Typography variant="caption" color="text.secondary" noWrap>{currentUser?.email}</Typography>
-              </Box>
-            </MenuItem>
-            <Divider />
-            <MenuItem component={RouterLink} to="/dashboard" onClick={handleProfileMenuClose}><Dashboard sx={{ mr: 1.5 }} fontSize="small" /> Dashboard</MenuItem>
-            <MenuItem component={RouterLink} to="/profile" onClick={handleProfileMenuClose}><Person sx={{ mr: 1.5 }} fontSize="small" /> My Profile</MenuItem>
-            <MenuItem component={RouterLink} to="/my-cases" onClick={handleProfileMenuClose}><FindInPage sx={{ mr: 1.5 }} fontSize="small" /> My Cases</MenuItem>
-            <Divider />
-            <MenuItem onClick={handleLogout} sx={{ color: 'error.main' }}><ExitToApp sx={{ mr: 1.5 }} fontSize="small" /> Logout</MenuItem>
-          </Menu>
         </Toolbar>
       </Container>
 
-      {/* Mobile Navigation Panel */}
+      {/* MOBILE DRAWER ENHANCEMENT */}
       <Collapse in={mobileMenuOpen}>
-        <Box sx={{ bgcolor: 'background.paper', borderTop: '1px solid rgba(0,0,0,0.1)', py: 1 }}>
-          <Container>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-              <Button component={RouterLink} to="/" startIcon={<Home />} onClick={() => setMobileMenuOpen(false)} sx={{ justifyContent: 'flex-start' }}>Home</Button>
-              <Button component={RouterLink} to="/lost" startIcon={<FindInPage />} onClick={() => setMobileMenuOpen(false)} sx={{ justifyContent: 'flex-start' }}>Lost Items</Button>
-              <Button component={RouterLink} to="/found" startIcon={<FindInPage />} onClick={() => setMobileMenuOpen(false)} sx={{ justifyContent: 'flex-start' }}>Found Items</Button>
-              <Button component={RouterLink} to="/report" startIcon={<FindInPage />} onClick={() => setMobileMenuOpen(false)} sx={{ justifyContent: 'flex-start' }}>Report Case</Button>
-              {isAdmin && <Button component={RouterLink} to="/admin" startIcon={<Dashboard />} onClick={() => setMobileMenuOpen(false)} sx={{ justifyContent: 'flex-start' }}>Admin Dashboard</Button>}
-              {!currentUser && <Button component={RouterLink} to="/register" variant="contained" sx={{ mt: 1, bgcolor: '#ff6f00' }} onClick={() => setMobileMenuOpen(false)}>Register Now</Button>}
+        <Box sx={{ bgcolor: 'white', p: 2, borderTop: '2px solid #ff6f00' }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                <Button component={RouterLink} to="/" onClick={() => setMobileMenuOpen(false)} sx={{ justifyContent: 'flex-start' }}>Home</Button>
+                <Button component={RouterLink} to="/lost" onClick={() => setMobileMenuOpen(false)} sx={{ justifyContent: 'flex-start' }}>Browse Lost</Button>
+                <Button component={RouterLink} to="/found" onClick={() => setMobileMenuOpen(false)} sx={{ justifyContent: 'flex-start' }}>Browse Found</Button>
+                <Button component={RouterLink} to="/report" variant="contained" sx={{ bgcolor: '#ff6f00' }} onClick={() => setMobileMenuOpen(false)}>Report Case</Button>
+                {isAdmin && <Button component={RouterLink} to="/admin" sx={{ color: 'red' }} onClick={() => setMobileMenuOpen(false)}>Admin Console</Button>}
             </Box>
-          </Container>
         </Box>
       </Collapse>
-
-      {/* Footer Strip */}
-      <Box sx={{ bgcolor: 'rgba(255,255,255,0.05)', py: 0.5 }}>
-        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.6)', display: 'block', textAlign: 'center' }}>
-          Official Lost & Found Platform for CUI Abbottabad
-        </Typography>
-      </Box>
     </AppBar>
   );
 };

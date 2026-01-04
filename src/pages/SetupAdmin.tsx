@@ -13,8 +13,18 @@ import {
   Card,
   CardContent,
   CircularProgress,
+  MenuItem,
+  IconButton,
+  InputAdornment,
 } from '@mui/material';
-import { Security, CheckCircle, Error, Login } from '@mui/icons-material';
+import { 
+  Security, 
+  CheckCircle, 
+  Login, 
+  Visibility, 
+  VisibilityOff, 
+  MailLock 
+} from '@mui/icons-material';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -22,6 +32,7 @@ import { authService } from '../services/supabaseAuthService';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 
+// 1. ORIGINAL SCHEMA (Preserved all refinements and validation)
 const setupSchema = z.object({
   email: z.string()
     .min(1, 'Email is required')
@@ -35,7 +46,7 @@ const setupSchema = z.object({
     .min(2, 'Name must be at least 2 characters'),
   adminCode: z.string()
     .min(1, 'Admin code is required')
-    .refine((code) => code === 'INITIAL_SETUP_2024', {
+    .refine((code) => code === '8219', {
       message: 'Invalid setup code',
     }),
 }).refine((data) => data.password === data.confirmPassword, {
@@ -45,14 +56,17 @@ const setupSchema = z.object({
 
 type SetupFormData = z.infer<typeof setupSchema>;
 
-const steps = ['Enter Setup Code', 'Create Admin Account', 'Complete Setup'];
+// 2. UPDATED STEPS (Added OTP Step)
+const steps = ['Enter Setup Code', 'Create Admin Account', 'Verify Email OTP', 'Complete Setup'];
 
 const SetupAdmin: React.FC = () => {
   const [activeStep, setActiveStep] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [adminCreated, setAdminCreated] = useState(false);
+  const [showPassword, setShowPassword] = React.useState(false);
+  const [otp, setOtp] = useState('');
   const [createdEmail, setCreatedEmail] = useState('');
   const [createdPassword, setCreatedPassword] = useState('');
+  
   const navigate = useNavigate();
 
   const {
@@ -60,6 +74,7 @@ const SetupAdmin: React.FC = () => {
     handleSubmit,
     formState: { errors },
     trigger,
+    getValues,
   } = useForm<SetupFormData>({
     resolver: zodResolver(setupSchema),
     mode: 'onTouched',
@@ -76,10 +91,6 @@ const SetupAdmin: React.FC = () => {
     setActiveStep((prevStep) => prevStep - 1);
   };
 
-  /**
-   * FIX: Manual verification for Step 0
-   * This bypasses the full form validation (email/password)
-   */
   const handleVerifyCode = async () => {
     const isCodeValid = await trigger('adminCode');
     if (isCodeValid) {
@@ -89,20 +100,48 @@ const SetupAdmin: React.FC = () => {
     }
   };
 
-  /**
-   * Final Form Submission for Step 1
-   */
-  const onSubmit = async (data: SetupFormData) => {
+  // Step 1 Submission: Trigger Supabase Sign Up + Send OTP
+  const onAccountSubmit = async (data: SetupFormData) => {
     setLoading(true);
     try {
       await authService.setupFirstAdmin(data.email, data.password, data.name);
-      setAdminCreated(true);
       setCreatedEmail(data.email);
       setCreatedPassword(data.password);
-      setActiveStep(2);
-      toast.success('Admin account created!');
+      setActiveStep(2); // Move to OTP verification
+      toast.success('Admin account created! Check your email for the code.');
     } catch (error: any) {
       toast.error(error.message || 'Registration failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Step 2 Submission: Verify OTP
+  /** Step 2: Verify the OTP received in email */
+  const handleVerifyOtp = async () => {
+    if (otp.length !== 8) {
+      toast.error('Please enter the 8-digit code');
+      return;
+    }
+    
+    setLoading(true);
+    try {
+      // 1. Verify the OTP with Supabase
+      await authService.verifySignUpOTP(createdEmail, otp);
+      
+      /** * 2. CRITICAL: Sign out immediately.
+       * Supabase automatically logs the user in after OTP verification.
+       * We sign them out so that the next login at /admin-login 
+       * triggers a fresh session with the correct Admin role.
+       */
+      await authService.signOut(); 
+      
+      // 3. Move to the final success step
+      setActiveStep(3); 
+      toast.success('Email verified! Admin setup complete.');
+    } catch (error: any) {
+      console.error('Verification error:', error);
+      toast.error(error.message || 'Invalid or expired OTP code');
     } finally {
       setLoading(false);
     }
@@ -124,15 +163,9 @@ const SetupAdmin: React.FC = () => {
               type="password"
               {...register('adminCode')}
               error={!!errors.adminCode}
-              helperText={errors.adminCode?.message || 'Enter: INITIAL_SETUP_2024'}
               sx={{ mb: 2 }}
               autoFocus
             />
-            <Alert severity="info">
-              <Typography variant="body2">
-                <strong>Default setup code: INITIAL_SETUP_2024</strong>
-              </Typography>
-            </Alert>
           </Box>
         );
         
@@ -161,11 +194,20 @@ const SetupAdmin: React.FC = () => {
               margin="normal"
               fullWidth
               label="Password"
-              type="password"
+              type={showPassword ? 'text' : 'password'}
               {...register('password')}
               error={!!errors.password}
               helperText={errors.password?.message}
               disabled={loading}
+              InputProps={{
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton onClick={() => setShowPassword(!showPassword)} edge="end">
+                      {showPassword ? <VisibilityOff /> : <Visibility />}
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              }}
             />
             <TextField
               margin="normal"
@@ -179,8 +221,30 @@ const SetupAdmin: React.FC = () => {
             />
           </Box>
         );
+
+      case 2: // NEW OTP STEP
+        return (
+          <Box sx={{ mt: 3, textAlign: 'center' }}>
+            <MailLock sx={{ fontSize: 60, color: 'primary.main', mb: 2 }} />
+            <Typography variant="h5" gutterBottom>Verify Admin Email</Typography>
+            <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+              A 8-digit security code was sent to <strong>{createdEmail}</strong>
+            </Typography>
+            <TextField
+              fullWidth
+              label="Verification Code"
+              value={otp}
+              onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 8))}
+              placeholder="00000000"
+              inputProps={{ 
+                style: { textAlign: 'center', letterSpacing: '0.8rem', fontSize: '1.8rem', fontWeight: 'bold' } 
+              }}
+              sx={{ mb: 2 }}
+            />
+          </Box>
+        );
         
-      case 2:
+      case 3:
         return (
           <Box sx={{ mt: 3, textAlign: 'center' }}>
             <CheckCircle sx={{ fontSize: 60, color: 'success.main', mb: 2 }} />
@@ -189,18 +253,20 @@ const SetupAdmin: React.FC = () => {
             </Typography>
             <Alert severity="success" sx={{ mb: 3, textAlign: 'left' }}>
               <Typography variant="body2">
+                The administrator account has been verified and activated.
+                <br /><br />
                 <strong>Email:</strong> {createdEmail}<br/>
-                <strong>Password:</strong> {createdPassword}
+                <strong>Status:</strong> Active (Admin)
               </Typography>
             </Alert>
             <Button
-              variant="contained"
-              fullWidth
-              startIcon={<Login />}
-              onClick={() => navigate('/admin-login')}
-            >
-              Go to Admin Login
-            </Button>
+  variant="contained"
+  fullWidth
+  startIcon={<Login />}
+  onClick={() => navigate('/admin-login')} // Direct them to the admin-specific portal
+>
+  Go to Admin Login
+</Button>
           </Box>
         );
       default:
@@ -210,7 +276,7 @@ const SetupAdmin: React.FC = () => {
 
   return (
     <Container component="main" maxWidth="md">
-      <Box sx={{ marginTop: 8, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+      <Box sx={{ marginTop: 8, mb: 8, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
         <Card sx={{ width: '100%', boxShadow: 3 }}>
           <CardContent sx={{ p: 4 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
@@ -224,12 +290,10 @@ const SetupAdmin: React.FC = () => {
               ))}
             </Stepper>
 
-            <Paper sx={{ p: 3, mb: 3 }}>
-              {/* The form only wraps content for the final submission on Step 1 */}
-              <form onSubmit={handleSubmit(onSubmit)}>
+            <Paper sx={{ p: 3, mb: 1 }}>
                 {renderStepContent(activeStep)}
                 
-                {activeStep < 2 && (
+                {activeStep < 3 && (
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 4 }}>
                     <Button
                       onClick={handleBackStep}
@@ -239,29 +303,35 @@ const SetupAdmin: React.FC = () => {
                       Back
                     </Button>
                     
-                    {activeStep === 0 ? (
-                      /* FIX: This button is NOT a submit type. It runs a manual check. */
-                      <Button
-                        type="button" 
-                        variant="contained"
-                        onClick={handleVerifyCode}
-                      >
+                    {activeStep === 0 && (
+                      <Button variant="contained" onClick={handleVerifyCode}>
                         Verify Code & Continue
                       </Button>
-                    ) : (
-                      /* Final submission button */
+                    )}
+
+                    {activeStep === 1 && (
                       <Button
-                        type="submit"
                         variant="contained"
+                        onClick={handleSubmit(onAccountSubmit)}
                         disabled={loading}
-                        endIcon={loading && <CircularProgress size={20} />}
+                        endIcon={loading && <CircularProgress size={20} color="inherit" />}
                       >
                         Create Admin Account
                       </Button>
                     )}
+
+                    {activeStep === 2 && (
+                      <Button
+                        variant="contained"
+                        onClick={handleVerifyOtp}
+                        disabled={loading || otp.length < 8}
+                        endIcon={loading && <CircularProgress size={20} color="inherit" />}
+                      >
+                        Verify & Finish
+                      </Button>
+                    )}
                   </Box>
                 )}
-              </form>
             </Paper>
           </CardContent>
         </Card>

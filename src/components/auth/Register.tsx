@@ -40,7 +40,7 @@ const registerSchema = z.object({
     }),
   studentId: z.string().optional(),
   department: z.string().optional(),
-  role: z.enum(['student', 'faculty', 'staff']).default('student'),
+  role: z.enum(['student', 'faculty']).default('student'),
 }).refine((data) => data.password === data.confirmPassword, {
   message: "Passwords don't match",
   path: ["confirmPassword"],
@@ -73,11 +73,11 @@ const Register: React.FC = () => {
     },
   });
 
+  // Inside your onSubmit function in Register.tsx
   const onSubmit = async (data: RegisterFormData) => {
     try {
       setLoading(true);
       
-      // 1. Prepare data - ensure no undefined values are sent to Supabase
       const additionalData = {
         role: data.role,
         studentId: data.studentId || '',
@@ -85,33 +85,18 @@ const Register: React.FC = () => {
         department: data.department || '',
       };
       
-      // 2. Call register
+      // Call the sign up service
       await registerUser(data.email, data.password, data.name, additionalData);
       
-      // 3. Success!
-      toast.success('Registration successful! Please verify your email.');
+      // SUCCESS: Instead of setting a local 'success' state, we move to the OTP page
+      toast.success('Account created! Please enter the verification code.');
       
-      // Give the session a moment to propagate before redirecting
-      setTimeout(() => {
-        navigate('/dashboard');
-      }, 1500);
+      // This is the line that fixes your issue:
+      navigate('/verify-email', { state: { email: data.email } });
       
     } catch (error: any) {
-      console.error('Registration error details:', error);
-      
-      let errorMessage = 'Registration failed';
-      
-      if (error.message.includes('already registered')) {
-        errorMessage = 'This email is already registered. Please login instead.';
-      } else if (error.message.includes('weak password')) {
-        errorMessage = 'Password is too weak. Please use a stronger password.';
-      } else if (error.message.includes('email already in use')) {
-        errorMessage = 'Email already in use. Please use a different email or login.';
-      } else if (error.message.includes('rate limit')) {
-        errorMessage = 'Too many registration attempts. Please try again later.';
-      }
-      
-      toast.error(errorMessage);
+      console.error('Registration error:', error);
+      toast.error(error.message || 'Registration failed');
     } finally {
       setLoading(false);
     }
@@ -120,22 +105,50 @@ const Register: React.FC = () => {
   const handleClickShowPassword = () => setShowPassword(!showPassword);
   const handleClickShowConfirmPassword = () => setShowConfirmPassword(!showConfirmPassword);
 
-  const roles = [
-    { value: 'student', label: 'Student' },
-    { value: 'faculty', label: 'Faculty Member' },
-    { value: 'staff', label: 'Staff Member' },
-  ];
+  // 1. Updated Roles (Simplified)
+const roles = [
+  { value: 'student', label: 'Student' },
+  { value: 'faculty', label: 'Faculty Member' },
+];
 
-  const departments = [
-    'Computer Science',
-    'Software Engineering',
-    'Electrical Engineering',
-    'Civil Engineering',
-    'Business Administration',
-    'Mathematics',
-    'Physics',
-    'Other',
-  ];
+  // 2. Comprehensive COMSATS Departments
+const departments = [
+  // Faculty of Information Science and Technology
+  'Computer Science',
+  'Software Engineering',
+  'Cyber Security',
+  'Artificial Intelligence',
+  'Data Science',
+  
+  // Faculty of Engineering
+  'Electrical & Computer Engineering',
+  'Mechanical Engineering',
+  'Civil Engineering',
+  'Chemical Engineering',
+  
+  // Faculty of Business Administration
+  'Management Sciences',
+  'Economics',
+  'Development Studies',
+  
+  // Faculty of Sciences
+  'Mathematics',
+  'Physics',
+  'Chemistry',
+  'Biosciences',
+  'Meteorology',
+  'Earth Sciences',
+  'Environmental Sciences',
+  
+  // Faculty of Architecture and Design
+  'Architecture',
+  'Design',
+  
+  // Others
+  'Humanities',
+  'Psychology',
+  'Other',
+];
 
   return (
     <Container component="main" maxWidth="sm">
@@ -147,10 +160,6 @@ const Register: React.FC = () => {
 
           <Alert severity="info" sx={{ mb: 3, width: '100%' }}>
             Join the Lost & Found community. You can use any valid email address to sign up.
-          </Alert>
-
-          <Alert severity="warning" sx={{ mb: 3, width: '100%' }}>
-            <strong>Note:</strong> You will receive a verification email. Please check your inbox before logging in.
           </Alert>
 
           <Box component="form" onSubmit={handleSubmit(onSubmit)} sx={{ width: '100%' }}>

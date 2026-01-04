@@ -1,6 +1,6 @@
 // src/services/supabaseAuthService.ts
 import { supabase } from '../lib/supabaseClient';
-import { User, RegisterFormData } from '../types';
+import { User } from '../types';
 import { prepareSupabaseData, toCamelCase } from '../utils/helpers';
 import toast from 'react-hot-toast';
 
@@ -42,89 +42,76 @@ export const authService = {
     }
   },
 
- /**
-   * Sign up new user
-   */
- async signUp(
-  email: string, 
-  password: string, 
-  name: string,
-  additionalData?: Partial<User>
-) {
-  try {
-    // Create auth user
-    const { data: authData, error: authError } = await supabase.auth.signUp({
-      email: email.trim().toLowerCase(),
-      password,
-      options: {
-        data: {
-          name,
-          email_verified: false,
-        },
-      },
-    });
-
-    if (authError) throw authError;
-
-    if (!authData.user) {
-      throw new Error('User creation failed');
-    }
-
-    // FIX: Create user profile matching your EXACT database columns
-    // Removed 'display_name' and 'photo_url' as they don't exist in your table
-    const studentIdValue = additionalData?.studentId || (additionalData as any)?.student_id || null;
-
-const userProfile = {
-  id: authData.user.id,
-  email: authData.user.email!,
-  name,
-  role: additionalData?.role || 'student',
-  phone: additionalData?.phone || null,
-  department: additionalData?.department || null,
-  student_id: studentIdValue, // Map the value here
-  is_active: true,
-};
-const { error: profileError } = await supabase
-  .from('users')
-  .insert([prepareSupabaseData(userProfile)]);
-
-    if (profileError) {
-      console.error('Profile creation error:', profileError);
-      // We log it but don't crash, because the Auth account was already created
-    }
-
-    return {
-      user: authData.user,
-      session: authData.session,
-      userData: toCamelCase(userProfile),
-    };
-  } catch (error: any) {
-    // ... (rest of your error handling)
-    throw new Error(error.message || 'Registration failed');
-  }
-},
   /**
-   * Sign in with Google OAuth
+   * Sign up new user
+   * Note: If Email Templates in Supabase use {{ .Token }}, this triggers an OTP.
    */
-  async signInWithGoogle() {
+  async signUp(
+    email: string, 
+    password: string, 
+    name: string,
+    additionalData?: Partial<User>
+  ) {
     try {
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: email.trim().toLowerCase(),
+        password,
         options: {
-          redirectTo: `${window.location.origin}/dashboard`,
-          queryParams: {
-            access_type: 'offline',
-            prompt: 'consent',
+          data: {
+            name: name,
+            role: additionalData?.role || 'student',
+            department: additionalData?.department || null,
+            student_id: (additionalData as any)?.studentId || (additionalData as any)?.student_id || null,
+            phone: additionalData?.phone || null,
           },
         },
+      });
+
+      if (authError) throw authError;
+
+      return {
+        user: authData.user,
+        session: authData.session,
+        userData: authData.user ? toCamelCase(authData.user.user_metadata) : null,
+      };
+    } catch (error: any) {
+      console.error('Registration error:', error);
+      throw new Error(error.message || 'Registration failed');
+    }
+  },
+
+  /**
+   * Verify Sign Up OTP (Email Verification)
+   * Added this to handle 6-digit code verification for new accounts
+   */
+  async verifySignUpOTP(email: string, token: string) {
+    try {
+      const { data, error } = await supabase.auth.verifyOtp({
+        email: email.trim().toLowerCase(),
+        token: token,
+        type: 'signup', // Use 'signup' for email verification
       });
 
       if (error) throw error;
       return data;
     } catch (error: any) {
-      console.error('Google sign in error:', error);
-      throw new Error('Google sign in failed. Please try again');
+      console.error('Email verification error:', error);
+      throw new Error(error.message || 'Invalid or expired verification code');
     }
+  },
+
+  /**
+   * Sign in with Google OAuth
+   */
+  async signInWithGoogle() {
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: 'http://localhost:3000/#/' 
+      },
+    });
+    if (error) throw error;
+    return data;
   },
 
   /**
@@ -178,22 +165,16 @@ const { error: profileError } = await supabase
         .from('users')
         .select('*')
         .eq('id', userId)
-        .maybeSingle(); // Changed from .single()
-  
-      if (error) {
-        console.error("Database fetch error:", error);
-        return null;
-      }
-  
-      // If data is null, the user exists in Auth but not in our Users table
-      if (!data) return null;
-  
-      return toCamelCase(data);
+        .maybeSingle();
+
+      if (error) throw error;
+      return data ? toCamelCase(data) : null;
     } catch (err) {
-      console.error("Unexpected profile fetch error:", err);
+      console.warn("Profile not found in database for user:", userId);
       return null;
     }
   },
+
   /**
    * Update user profile
    */
@@ -210,7 +191,6 @@ const { error: profileError } = await supabase
 
       if (error) throw error;
       
-      // Also update auth metadata if name changed
       if (updates.name) {
         await supabase.auth.updateUser({
           data: { name: updates.name }
@@ -227,20 +207,35 @@ const { error: profileError } = await supabase
   /**
    * Reset password - send reset email
    */
+  // Add these to your authService object in src/services/supabaseAuthService.ts
+
+  /**
+   * Reset password Step 1: Send a 6-digit OTP code to the email
+   */
   async resetPassword(email: string) {
+    const { error } = await supabase.auth.resetPasswordForEmail(email);
+    if (error) throw error;
+    return true;
+  },
+
+  /**
+   * Reset password Step 2: Verify the -digit code
+   */
+  async verifyResetOTP(email: string, token: string) {
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`,
+      const { data, error } = await supabase.auth.verifyOtp({
+        email: email.trim().toLowerCase(),
+        token: token,
+        type: 'recovery', // Important: use 'recovery' for password resets
       });
 
       if (error) throw error;
-      return true;
+      return data; // This will create a session so the user can now update password
     } catch (error: any) {
-      console.error('Reset password error:', error);
-      throw new Error('Failed to send reset email');
+      console.error('OTP Verification error:', error);
+      throw new Error(error.message || 'Invalid or expired code');
     }
   },
-
   /**
    * Update password (after reset)
    */
@@ -345,18 +340,16 @@ const { error: profileError } = await supabase
   async resendVerificationEmail(email: string) {
     try {
       const { error } = await supabase.auth.resend({
-        type: 'signup',
+        type: 'signup', // Use 'signup' for registration OTP
         email: email.trim().toLowerCase(),
-        options: {
-          emailRedirectTo: `${window.location.origin}/dashboard`,
-        },
+        // Removed emailRedirectTo because OTPs don't need a redirect URL
       });
 
       if (error) throw error;
       return true;
     } catch (error: any) {
       console.error('Resend verification error:', error);
-      throw new Error('Failed to resend verification email');
+      throw new Error(error.message || 'Failed to resend verification code');
     }
   },
 };
