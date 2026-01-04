@@ -103,17 +103,21 @@ export const authService = {
   /**
  * Sign in with Google OAuth
  */
-async signInWithGoogle() {
-  const { data, error } = await supabase.auth.signInWithOAuth({
-    provider: 'google',
-    options: {
-      // This dynamically grabs the current site URL (Vercel or Localhost)
-      redirectTo: `${window.location.origin}/#/`, 
-    },
-  });
-  if (error) throw error;
-  return data;
-},
+  async signInWithGoogle() {
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        // THIS IS THE KEY: Hardcode your Vercel URL here
+        redirectTo: 'https://comsats-lostfound.vercel.app/', 
+        queryParams: {
+          access_type: 'offline',
+          prompt: 'consent',
+        },
+      },
+    });
+    if (error) throw error;
+    return data;
+  },
 
   /**
    * Sign out current user

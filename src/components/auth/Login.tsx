@@ -21,7 +21,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useAuth } from '../../contexts/AuthContext';
 import toast from 'react-hot-toast';
-
+import { supabase } from '../../lib/supabaseClient';
 // UPDATED: Standard email schema that allows any valid email domain
 const loginSchema = z.object({
   email: z.string()
@@ -93,10 +93,24 @@ const Login: React.FC = () => {
   const handleGoogleSignIn = async () => {
     try {
       setGoogleLoading(true);
-      await signInWithGoogle();
+      
+      // We use the standard web redirect. 
+      // The APK will follow this redirect just like a browser does.
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          // Redirect back to your live site
+          redirectTo: 'https://comsats-lostfound.vercel.app/dashboard', 
+          queryParams: {
+            prompt: 'select_account', // Forces Google to let user pick account
+          },
+        },
+      });
+  
+      if (error) throw error;
     } catch (error: any) {
       console.error('Google sign in error:', error);
-      toast.error('Failed to sign in with Google. Please try again.');
+      toast.error('Failed to sign in with Google.');
     } finally {
       setGoogleLoading(false);
     }

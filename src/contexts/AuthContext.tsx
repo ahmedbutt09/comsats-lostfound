@@ -81,6 +81,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     let mounted = true;
   
     const handleUserSession = async (session: any) => {
+      // Add this at the very top of the function
+      if (mounted) setLoading(true); 
+    
       if (!session?.user) {
         if (mounted) {
           setCurrentUser(null);
