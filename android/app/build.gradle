@@ -24,7 +24,6 @@ android {
         }
     }
 
-    // ADDED THIS BLOCK TO FIX THE 75% FAILURE
     lint {
         checkReleaseBuilds false
         abortOnError false
@@ -47,6 +46,13 @@ android {
     }
 }
 
+// FORCE Gradle to use browser 1.8.0 to prevent API 36 conflict
+configurations.all {
+    resolutionStrategy {
+        force 'androidx.browser:browser:1.8.0'
+    }
+}
+
 repositories {
     flatDir {
         dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
@@ -59,7 +65,7 @@ dependencies {
     implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
     
-    // ADD THIS LINE TO FIX THE API 36 / GRADLE 8.9 ERROR
+    // Explicitly include version 1.8.0
     implementation "androidx.browser:browser:1.8.0"
 
     implementation project(':capacitor-android')
