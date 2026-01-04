@@ -3,6 +3,5 @@
     <string name="app_name">COMSATS LOST &amp; FOUND</string>
     <string name="title_activity_main">COMSATS LOST &amp; FOUND</string>
     <string name="package_name">com.findit.app</string>
-    <string name="custom_url_scheme">com.findit.app</string>
     <string name="custom_url_scheme">comsatsapp</string>
 </resources>
